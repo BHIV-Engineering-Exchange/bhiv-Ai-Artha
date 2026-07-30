@@ -318,6 +318,8 @@ app.use('/api/v1/multi-company', multiCompanyRoutes);
 app.use('/api/v1/tantra', tantraRoutes);
 app.use('/api/v1/governance', governanceRoutes);
 app.use('/api/v1/financial-runtime', financialRuntimeRoutes);
+app.use('/', healthRoutes);
+
 
 // SETU callback webhook endpoint (delegated to setuDispatch service)
 // Protected by HMAC signature verification for external webhook security
