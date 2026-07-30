@@ -70,7 +70,7 @@ export const getExpense = async (req, res) => {
     const expense = await expenseService.getExpenseById(req.params.id);
     
     // Check if user can view this expense
-    if (req.user.role === 'viewer' && expense.submittedBy._id.toString() !== req.user._id) {
+    if (req.user.role === 'viewer' && expense.submittedBy?._id?.toString() !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to view this expense',

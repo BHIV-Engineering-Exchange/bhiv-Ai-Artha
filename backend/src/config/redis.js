@@ -2,6 +2,7 @@ import { createClient } from 'redis';
 import logger from './logger.js';
 
 let redisClient = null;
+let redisAvailable = false;
 
 const connectRedis = async () => {
   // Skip Redis if not configured
@@ -21,15 +22,23 @@ const connectRedis = async () => {
     });
 
     redisClient.on('error', (err) => {
+      redisAvailable = false;
       logger.error('Redis client error:', err);
     });
 
     redisClient.on('connect', () => {
+      redisAvailable = true;
       logger.info('Redis client connected successfully');
     });
 
     redisClient.on('ready', () => {
+      redisAvailable = true;
       logger.info('Redis client ready to use');
+    });
+
+    redisClient.on('end', () => {
+      redisAvailable = false;
+      logger.warn('Redis client disconnected');
     });
 
     await redisClient.connect();
@@ -46,7 +55,7 @@ const getRedisClient = () => {
 };
 
 const cacheGet = async (key) => {
-  if (!redisClient) return null;
+  if (!redisClient || !redisAvailable) return null;
 
   try {
     const data = await redisClient.get(key);
@@ -58,7 +67,7 @@ const cacheGet = async (key) => {
 };
 
 const cacheSet = async (key, value, expirySeconds = 3600) => {
-  if (!redisClient) return false;
+  if (!redisClient || !redisAvailable) return false;
 
   try {
     await redisClient.setEx(key, expirySeconds, JSON.stringify(value));
@@ -70,7 +79,7 @@ const cacheSet = async (key, value, expirySeconds = 3600) => {
 };
 
 const cacheDel = async (key) => {
-  if (!redisClient) return false;
+  if (!redisClient || !redisAvailable) return false;
 
   try {
     await redisClient.del(key);
@@ -82,7 +91,7 @@ const cacheDel = async (key) => {
 };
 
 const cacheFlush = async () => {
-  if (!redisClient) return false;
+  if (!redisClient || !redisAvailable) return false;
 
   try {
     await redisClient.flushDb();

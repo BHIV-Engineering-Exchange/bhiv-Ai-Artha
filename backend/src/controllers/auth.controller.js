@@ -1,10 +1,14 @@
 import User from '../models/User.js';
 import logger from '../config/logger.js';
 import { signAccessToken } from '../utils/authToken.js';
+import { getBlackholeCookieOptions, clearBlackholeCookie } from '../middleware/auth.js';
 
-/**
- * POST /api/v1/auth/login — verify local User password; return JWT (no external auth server).
- */
+const COOKIE_NAME = 'blackhole_token';
+
+function getCookieOptions() {
+  return getBlackholeCookieOptions();
+}
+
 export const login = async (req, res) => {
   try {
     const email = (req.body?.email || '').trim().toLowerCase();
@@ -23,10 +27,11 @@ export const login = async (req, res) => {
 
     const token = signAccessToken(user);
 
+    res.cookie(COOKIE_NAME, token, getCookieOptions());
+
     return res.json({
       success: true,
       data: {
-        token,
         user: {
           id: user._id,
           email: user.email,
@@ -42,9 +47,6 @@ export const login = async (req, res) => {
   }
 };
 
-/**
- * POST /api/v1/auth/signup — create local user and return JWT.
- */
 export const signup = async (req, res) => {
   try {
     const name = (req.body?.name || '').trim();
@@ -61,8 +63,11 @@ export const signup = async (req, res) => {
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    }
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ success: false, message: 'Password must contain uppercase, lowercase, and a number' });
     }
 
     const existing = await User.findOne({ email }).select('_id');
@@ -83,10 +88,12 @@ export const signup = async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     const token = signAccessToken(user);
+
+    res.cookie(COOKIE_NAME, token, getCookieOptions());
+
     return res.status(201).json({
       success: true,
       data: {
-        token,
         user: {
           id: user._id,
           email: user.email,
@@ -103,4 +110,9 @@ export const signup = async (req, res) => {
     logger.error('signup:', err.message);
     return res.status(500).json({ success: false, message: 'Signup failed' });
   }
+};
+
+export const logout = async (req, res) => {
+  clearBlackholeCookie(res);
+  return res.json({ success: true, message: 'Logged out' });
 };

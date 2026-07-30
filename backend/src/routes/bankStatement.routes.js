@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 import { uploadFile, handleUploadError } from '../middleware/upload.js';
 import {
   uploadBankStatement,
@@ -13,33 +13,21 @@ import {
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(protect);
 
-// Upload statement (CSV format preferred)
 router.post(
   '/upload',
+  authorize('admin', 'accountant'),
   uploadFile.single('statement'),
   handleUploadError,
   uploadBankStatement
 );
 
-// Get all statements
-router.get('/', getBankStatements);
-
-// Get single statement
-router.get('/:id', getBankStatement);
-
-// Permanently delete statement
-router.delete('/:id', deleteBankStatement);
-
-// Process statement manually
-router.post('/:id/process', processBankStatement);
-
-// Match transactions with expenses
-router.post('/:id/match', matchTransactions);
-
-// Create expenses from selected transactions
-router.post('/:id/create-expenses', createExpensesFromTransactions);
+router.get('/', authorize('admin', 'accountant', 'viewer'), getBankStatements);
+router.get('/:id', authorize('admin', 'accountant', 'viewer'), getBankStatement);
+router.delete('/:id', authorize('admin'), deleteBankStatement);
+router.post('/:id/process', authorize('admin', 'accountant'), processBankStatement);
+router.post('/:id/match', authorize('admin', 'accountant'), matchTransactions);
+router.post('/:id/create-expenses', authorize('admin', 'accountant'), createExpensesFromTransactions);
 
 export default router;

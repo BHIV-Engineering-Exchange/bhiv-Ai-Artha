@@ -159,12 +159,11 @@ paymentSchema.index({ traceId: 1 });
 
 paymentSchema.pre('save', async function(next) {
   if (this.isNew && !this.paymentReference) {
+    const Counter = mongoose.model('Counter');
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await mongoose.model('Payment').countDocuments({
-      paymentReference: new RegExp(`^PAYREF-${dateStr}`)
-    });
-    this.paymentReference = `PAYREF-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+    const seq = await Counter.getNextSequence('payment', { date: dateStr });
+    this.paymentReference = `PAYREF-${dateStr}-${String(seq).padStart(4, '0')}`;
   }
   next();
 });

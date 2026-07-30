@@ -7,7 +7,6 @@ import performanceService from '../services/performance.service.js';
 export const requestTimer = (req, res, next) => {
   const startTime = Date.now();
 
-  // Log when response finishes
   res.on('finish', () => {
     const duration = Date.now() - startTime;
     const logData = {
@@ -19,13 +18,11 @@ export const requestTimer = (req, res, next) => {
       userAgent: req.get('user-agent'),
     };
 
-    // Record metrics
     performanceService.recordRequest(duration, res.statusCode);
 
-    // Log slow requests
     if (duration > 1000) {
       logger.warn('Slow request detected', logData);
-    } else {
+    } else if (process.env.NODE_ENV !== 'production') {
       logger.info('Request completed', logData);
     }
   });
@@ -33,11 +30,15 @@ export const requestTimer = (req, res, next) => {
   next();
 };
 
+let memoryMonitorInterval = null;
+
 /**
- * Memory usage monitor
+ * Memory usage monitor — returns interval ID for cleanup
  */
 export const memoryMonitor = () => {
-  setInterval(() => {
+  if (memoryMonitorInterval) return memoryMonitorInterval;
+
+  memoryMonitorInterval = setInterval(() => {
     const memUsage = process.memoryUsage();
     const memoryData = {
       rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
@@ -46,15 +47,23 @@ export const memoryMonitor = () => {
       external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
     };
 
-    // Record memory metrics
     performanceService.recordMemoryUsage(memUsage);
 
-    logger.info('Memory usage', memoryData);
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info('Memory usage', memoryData);
+    }
 
-    // Alert if memory usage is high
     if (memUsage.heapUsed > 500 * 1024 * 1024) {
-      // > 500MB
       logger.warn('High memory usage detected', memoryData);
     }
-  }, 60000); // Check every minute
+  }, 60000);
+
+  return memoryMonitorInterval;
+};
+
+export const stopMemoryMonitor = () => {
+  if (memoryMonitorInterval) {
+    clearInterval(memoryMonitorInterval);
+    memoryMonitorInterval = null;
+  }
 };

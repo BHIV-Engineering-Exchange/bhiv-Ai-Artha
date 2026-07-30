@@ -79,24 +79,9 @@ const JournalEntryCreate = () => {
       const response = await api.get('/accounts');
       setAccounts(response.data.data || []);
     } catch (error) {
-      // Sample accounts
-      setAccounts([
-        { _id: '1', code: '1000', name: 'Cash', type: 'Assets' },
-        { _id: '2', code: '1100', name: 'Bank Account', type: 'Assets' },
-        { _id: '3', code: '1200', name: 'Accounts Receivable', type: 'Assets' },
-        { _id: '4', code: '1300', name: 'Inventory', type: 'Assets' },
-        { _id: '5', code: '2000', name: 'Accounts Payable', type: 'Liabilities' },
-        { _id: '6', code: '2100', name: 'GST Payable', type: 'Liabilities' },
-        { _id: '7', code: '2200', name: 'TDS Payable', type: 'Liabilities' },
-        { _id: '8', code: '3000', name: 'Share Capital', type: 'Equity' },
-        { _id: '9', code: '4000', name: 'Sales Revenue', type: 'Income' },
-        { _id: '10', code: '4100', name: 'Service Revenue', type: 'Income' },
-        { _id: '11', code: '5000', name: 'Cost of Goods Sold', type: 'Expense' },
-        { _id: '12', code: '5100', name: 'Salaries & Wages', type: 'Expense' },
-        { _id: '13', code: '5200', name: 'Rent Expense', type: 'Expense' },
-        { _id: '14', code: '5300', name: 'Utilities', type: 'Expense' },
-        { _id: '15', code: '5400', name: 'GST Input Credit', type: 'Assets' },
-      ]);
+      console.error('Failed to fetch accounts:', error);
+      toast.error('Failed to load chart of accounts');
+      setAccounts([]);
     }
   };
 

@@ -38,14 +38,12 @@ export const performanceMonitor = requestTimer;
 
 // Error tracking middleware
 export const errorTracker = (err, req, res, next) => {
-  // Log error with context
   logger.error('Request error', {
     error: err.message,
-    stack: err.stack,
+    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack,
     method: req.method,
     url: req.originalUrl,
     userId: req.user?._id,
-    body: req.body,
     params: req.params,
     query: req.query,
   });

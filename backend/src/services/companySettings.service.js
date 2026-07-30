@@ -44,9 +44,20 @@ class CompanySettingsService {
    * Update company settings
    */
   async updateSettings(updateData) {
+    const allowedFields = [
+      'companyName', 'address', 'gstin', 'pan', 'tan',
+      'gstSettings', 'tdsSettings', 'accountingSettings',
+      'logo', 'branding', 'notificationPreferences',
+    ];
+    const filtered = {};
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        filtered[field] = updateData[field];
+      }
+    }
     const settings = await CompanySettings.findByIdAndUpdate(
       'company_settings',
-      updateData,
+      filtered,
       {
         new: true,
         upsert: true,

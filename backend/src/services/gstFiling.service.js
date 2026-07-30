@@ -1,6 +1,7 @@
 import Invoice from '../models/Invoice.js';
 import Expense from '../models/Expense.js';
 import CompanySettings from '../models/CompanySettings.js';
+import GSTReturn from '../models/GSTReturn.js';
 import Decimal from 'decimal.js';
 import logger from '../config/logger.js';
 import fs from 'fs';
@@ -368,7 +369,17 @@ class GSTFilingService {
 
       // Calculate net payable
       const netPayable = outputGST.minus(inputGST);
-      const previousCredit = new Decimal(0); // TODO: Get from previous period
+
+      // Get previous period's closing credit balance
+      const prevMonth = parseInt(month) === 1 ? 12 : parseInt(month) - 1;
+      const prevYear = parseInt(month) === 1 ? parseInt(year) - 1 : parseInt(year);
+      const prevReturn = await GSTReturn.findOne({
+        returnType: 'GSTR3B',
+        'period.year': prevYear.toString(),
+        'period.month': prevMonth.toString().padStart(2, '0'),
+        status: 'filed',
+      }).sort({ filedDate: -1 }).lean();
+      const previousCredit = new Decimal(prevReturn?.closingBalance || 0);
       const finalPayable = netPayable.minus(previousCredit);
 
       // Get last 6 months data for trend
@@ -445,7 +456,10 @@ class GSTFilingService {
             tax: 0,
           },
         },
-        returns: [], // TODO: Get from GSTReturn model
+        returns: await GSTReturn.find({
+          'period.year': year.toString(),
+          'period.month': month.toString().padStart(2, '0'),
+        }).sort({ filedDate: -1 }).lean(),
       };
     } catch (error) {
       logger.error('Get GST summary error:', error);

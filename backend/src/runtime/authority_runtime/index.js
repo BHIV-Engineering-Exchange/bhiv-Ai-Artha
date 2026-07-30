@@ -155,10 +155,9 @@ function ensureOwnershipMap() {
  * @param {string} collectionName - MongoDB collection name
  * @returns {{ allowed: boolean, reason: string, capability_id?: string }}
  */
-export function enforceServiceAccess(serviceName, operation, collectionName) {
+export async function enforceServiceAccess(serviceName, operation, collectionName) {
   ensureOwnershipMap();
 
-  // Find which capability owns this service
   let ownerCapability = null;
 
   for (const [capId, collections] of _ownershipMap) {
@@ -175,8 +174,7 @@ export function enforceServiceAccess(serviceName, operation, collectionName) {
     };
   }
 
-  // Check if the service is the provider for this capability
-  const authority = getAuthorityDefinition(ownerCapability);
+  const authority = await getAuthorityDefinition(ownerCapability);
   if (!authority) {
     return {
       allowed: false,
@@ -307,7 +305,7 @@ export function getCapabilityCollections(capabilityId) {
  * @param {object} req - Express request object (must have capability/authority set by middleware)
  * @returns {object} Audit trail object
  */
-export function auditEnforcement(req) {
+export async function auditEnforcement(req) {
   const audit = {
     timestamp: new Date().toISOString(),
     path: req.originalUrl || req.path,
@@ -331,7 +329,7 @@ export function auditEnforcement(req) {
     return audit;
   }
 
-  const authority = getAuthorityDefinition(req.capability);
+  const authority = await getAuthorityDefinition(req.capability);
   if (!authority) {
     audit.violations.push({
       type: 'UNKNOWN_CAPABILITY',

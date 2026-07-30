@@ -12,12 +12,15 @@ const gstReturnSchema = new mongoose.Schema({
       type: Number,
       min: 1,
       max: 12,
+      required: function() {
+        return this.returnType === 'GSTR1' || this.returnType === 'GSTR3B';
+      },
     },
     year: {
       type: Number,
       required: true,
     },
-    quarter: Number, // For quarterly filers
+    quarter: Number,
   },
   gstin: {
     type: String,

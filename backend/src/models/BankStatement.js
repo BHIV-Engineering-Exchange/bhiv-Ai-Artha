@@ -189,8 +189,9 @@ bankStatementSchema.index({ 'transactions.date': -1 });
 // Auto-generate statement number
 bankStatementSchema.pre('save', async function(next) {
   if (this.isNew && !this.statementNumber) {
-    const count = await mongoose.model('BankStatement').countDocuments();
-    this.statementNumber = `STMT-${String(count + 1).padStart(6, '0')}`;
+    const Counter = mongoose.model('Counter');
+    const seq = await Counter.getNextSequence('bankStatement');
+    this.statementNumber = `STMT-${String(seq).padStart(6, '0')}`;
   }
   next();
 });

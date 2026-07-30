@@ -20,9 +20,10 @@ class ChartOfAccountsService {
     }
 
     if (search) {
+      const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { code: { $regex: search, $options: 'i' } },
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { code: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 

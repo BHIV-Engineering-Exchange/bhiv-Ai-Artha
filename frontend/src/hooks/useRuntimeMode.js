@@ -12,9 +12,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import api from '../services/api';
-import { AUTH_TOKEN_KEY } from '../services/api';
 
 export const RUNTIME_MODES = {
   CHECKING:            'CHECKING',
@@ -47,30 +45,23 @@ export function useRuntimeMode() {
     setMode(RUNTIME_MODES.CHECKING);
 
     // Health endpoint is at root /health — NOT under /api/v1
-    // Derive the origin from the api baseURL (strip /api/v1)
-    const origin = api.defaults.baseURL?.replace(/\/api\/v1$/, '') || 'http://localhost:5000';
+    // In dev with Vite proxy, health is at the backend directly
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const healthOrigin = isLocal ? 'http://localhost:5000' : window.location.origin;
 
     try {
-      const res = await axios.get(`${origin}/health`, { timeout: 5000 });
+      // Use full URL so axios skips baseURL — health is at /health, not /api/v1/health
+      const res = await api.get(`${healthOrigin}/health`, { timeout: 5000 });
       setHealthDetail(res.data);
 
-      // Health OK — now check signals endpoint (requires auth token)
-      const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
-
-      if (!token) {
-        // No token yet (user not logged in) — backend is reachable, signals need auth
+      try {
+        await api.get('/signals/snapshot', { timeout: 5000 });
         setMode(RUNTIME_MODES.BACKEND_CONNECTED);
-      } else {
-        try {
-          await api.get('/signals/snapshot', { timeout: 5000 });
+      } catch (sigErr) {
+        if (sigErr.response?.status === 401) {
           setMode(RUNTIME_MODES.BACKEND_CONNECTED);
-        } catch (sigErr) {
-          // 401 means token expired — still connected, just auth issue
-          if (sigErr.response?.status === 401) {
-            setMode(RUNTIME_MODES.BACKEND_CONNECTED);
-          } else {
-            setMode(RUNTIME_MODES.BACKEND_DEGRADED);
-          }
+        } else {
+          setMode(RUNTIME_MODES.BACKEND_DEGRADED);
         }
       }
     } catch {

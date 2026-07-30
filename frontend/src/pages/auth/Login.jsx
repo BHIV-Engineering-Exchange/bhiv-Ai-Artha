@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import api, { AUTH_TOKEN_KEY } from '../../services/api';
+import api from '../../services/api';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 
@@ -39,17 +39,12 @@ const Login = () => {
     setPasswordError('');
     setSubmitting(true);
     try {
-      const { data } = await api.post('/auth/login', { email: em, password });
-      const token = data?.data?.token;
-      if (!token) {
-        toast.error('No token returned from server');
-        return;
-      }
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      await api.post('/auth/login', { email: em, password });
       await checkAuth();
       navigate('/dashboard', { replace: true });
-    } catch {
-      /* interceptor */
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Login failed';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }

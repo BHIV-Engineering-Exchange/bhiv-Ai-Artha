@@ -19,7 +19,7 @@ export const SIGNAL_SOURCE = {
 export function useSignals() {
   const [signals,   setSignals]   = useState([]);
   const [source,    setSource]    = useState(null);
-  const [loading,   setLoading]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [rawPayload, setRawPayload] = useState(null);
 
@@ -27,14 +27,12 @@ export function useSignals() {
     setLoading(true);
     setError(null);
 
-    // Attempt 1: GET /api/v1/signals (persisted ComplianceSignal records)
     try {
       const res = await api.get('/signals', { params: { limit: 50 } });
       const list = res.data?.data || [];
       setRawPayload(res.data);
 
       if (list.length > 0) {
-        // Deduplicate by type — keep only newest per type
         const seen = new Map();
         list.forEach(sig => {
           const type = sig.type || sig.signal_type;
@@ -51,14 +49,12 @@ export function useSignals() {
       // List endpoint failed — try snapshot
     }
 
-    // Attempt 2: GET /api/v1/signals/snapshot (ledger-derived)
     try {
       const res = await api.get('/signals/snapshot');
       const snap = res.data?.data;
       setRawPayload(res.data);
 
       if (snap) {
-        // Return snapshot as-is — dashboard maps it
         setSignals([snap]);
         setSource(SIGNAL_SOURCE.LIVE_SNAPSHOT);
         setLoading(false);

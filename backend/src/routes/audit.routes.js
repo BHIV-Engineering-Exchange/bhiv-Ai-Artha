@@ -6,9 +6,9 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/trail/:entityType/:entityId', auditController.getEntityAuditTrail);
-router.get('/summary', auditController.getAuditSummary);
-router.get('/verify-chain', auditController.verifyAuditChain);
-router.get('/export', auditController.exportAuditTrail);
+router.get('/trail/:entityType/:entityId', authorize('admin', 'accountant', 'viewer'), auditController.getEntityAuditTrail);
+router.get('/summary', authorize('admin', 'accountant', 'viewer'), auditController.getAuditSummary);
+router.get('/verify-chain', authorize('admin', 'accountant', 'viewer'), auditController.verifyAuditChain);
+router.get('/export', authorize('admin'), auditController.exportAuditTrail);
 
 export default router;

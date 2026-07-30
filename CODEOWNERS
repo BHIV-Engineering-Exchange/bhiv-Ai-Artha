@@ -1,5 +1,0 @@
-# CODEOWNERS file - enforces review requirements
-* @bhavesh @cto @ashmit-pandey
-/backend/src/config/ @cto @security-lead
-/backend/src/middleware/security.js @security-lead
-/.env.example @cto

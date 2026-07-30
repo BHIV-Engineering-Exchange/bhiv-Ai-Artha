@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters'],
+    minlength: [8, 'Password must be at least 8 characters'],
     select: false,
   },
   name: {
@@ -42,23 +42,28 @@ const userSchema = new mongoose.Schema({
   },
   lastLogin: Date,
   refreshToken: String,
+  refreshTokenExpiresAt: Date,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
 }, {
   timestamps: true,
 });
 
-// Additional indexes for performance
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ lastLogin: -1 });
+userSchema.index({ resetPasswordExpire: 1 }, { expireAfterSeconds: 0 });
 
-// Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+
+  if (this.isModified('refreshToken') && this.refreshToken && !this.refreshTokenExpiresAt) {
+    this.refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  }
+
   next();
 });
 

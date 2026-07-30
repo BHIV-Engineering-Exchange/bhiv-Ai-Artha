@@ -18,6 +18,22 @@ const connectDB = async () => {
     await mongoose.connect(mongoURI, options);
     
     logger.info(`MongoDB Connected: ${mongoose.connection.host}`);
+
+    mongoose.connection.on('disconnected', () => {
+      transactionsAvailable = false;
+      logger.warn('MongoDB disconnected - transactions disabled');
+    });
+
+    mongoose.connection.on('connected', async () => {
+      try {
+        await mongoose.connection.db.admin().command({ replSetGetStatus: 1 });
+        transactionsAvailable = true;
+        logger.info('MongoDB reconnected - transactions enabled');
+      } catch {
+        transactionsAvailable = false;
+        logger.warn('MongoDB reconnected - transactions disabled (no replica set)');
+      }
+    });
     
     // Check for replica set and transaction support
     try {

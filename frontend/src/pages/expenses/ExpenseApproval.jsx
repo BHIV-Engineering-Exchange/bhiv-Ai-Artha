@@ -43,48 +43,8 @@ const ExpenseApproval = () => {
       setExpenses(response.data.data || []);
     } catch (error) {
       console.error('Failed to fetch expenses:', error);
-      // Sample data for demo
-      setExpenses([
-        {
-          _id: '1',
-          description: 'Software License - Adobe CC Annual',
-          amount: 52000,
-          gstAmount: 7920,
-          category: 'IT',
-          vendor: 'Adobe Systems',
-          date: '2026-02-09',
-          notes: 'Annual subscription for design team (5 licenses)',
-          status: 'pending',
-          submittedBy: { name: 'Jane Smith', email: 'jane@artha.local' },
-          receipts: [{ name: 'adobe-invoice.pdf' }],
-        },
-        {
-          _id: '2',
-          description: 'Team Building Event',
-          amount: 45000,
-          gstAmount: 6840,
-          category: 'HR',
-          vendor: 'EventCo India',
-          date: '2026-02-11',
-          notes: 'Q1 team building activity for engineering team',
-          status: 'pending',
-          submittedBy: { name: 'HR Admin', email: 'hr@artha.local' },
-          receipts: [],
-        },
-        {
-          _id: '3',
-          description: 'Client Visit - Delhi',
-          amount: 28500,
-          gstAmount: 4320,
-          category: 'Travel',
-          vendor: 'Multiple Vendors',
-          date: '2026-02-08',
-          notes: 'Flight + Hotel for client presentation',
-          status: 'pending',
-          submittedBy: { name: 'Mike Johnson', email: 'mike@artha.local' },
-          receipts: [{ name: 'flight-ticket.pdf' }, { name: 'hotel-bill.pdf' }],
-        },
-      ]);
+      toast.error('Failed to load pending expenses');
+      setExpenses([]);
     } finally {
       setLoading(false);
     }
@@ -95,7 +55,7 @@ const ExpenseApproval = () => {
     try {
       const response = await api.post(`/expenses/${expense._id}/approve`);
       if (response.data.warnings?.length) {
-        toast.warning(`Approved with warning: ${response.data.warnings[0]}`);
+        toast(`Approved with warning: ${response.data.warnings[0]}`, { icon: '⚠️' });
       } else {
         toast.success('Expense approved successfully');
       }

@@ -46,13 +46,13 @@ const EXPORT_TYPES = [
 ];
 
 const SOURCE_SYSTEMS = [
-  { id: 'tally', label: 'Tally ERP / TallyPrime', formats: ['xml', 'csv', 'json'] },
-  { id: 'zoho', label: 'Zoho Books', formats: ['csv'] },
-  { id: 'quickbooks', label: 'QuickBooks', formats: ['csv'] },
-  { id: 'marg', label: 'Marg ERP', formats: ['xml', 'csv'] },
-  { id: 'busy', label: 'Busy Accounting', formats: ['csv'] },
-  { id: 'sage', label: 'Sage', formats: ['csv'] },
-  { id: 'generic', label: 'Generic CSV/JSON', formats: ['csv', 'json'] },
+  { id: 'tally', label: 'Tally ERP / TallyPrime', formats: ['xml', 'csv', 'json', 'xlsx'] },
+  { id: 'zoho', label: 'Zoho Books', formats: ['csv', 'xlsx'] },
+  { id: 'quickbooks', label: 'QuickBooks', formats: ['csv', 'xlsx'] },
+  { id: 'marg', label: 'Marg ERP', formats: ['xml', 'csv', 'xlsx'] },
+  { id: 'busy', label: 'Busy Accounting', formats: ['csv', 'xlsx'] },
+  { id: 'sage', label: 'Sage', formats: ['csv', 'xlsx'] },
+  { id: 'generic', label: 'Generic CSV/JSON/Excel', formats: ['csv', 'json', 'xlsx'] },
 ];
 
 export default function DataIngestion() {
@@ -80,8 +80,8 @@ export default function DataIngestion() {
     if (!file) return;
 
     const ext = file.name.split('.').pop().toLowerCase();
-    if (!['xml', 'csv', 'json'].includes(ext)) {
-      toast.error('Unsupported file format. Use XML, CSV, or JSON.');
+    if (!['xml', 'csv', 'json', 'xlsx', 'xls'].includes(ext)) {
+      toast.error('Unsupported file format. Use XML, CSV, JSON, or Excel (XLS/XLSX).');
       return;
     }
 
@@ -275,7 +275,7 @@ export default function DataIngestion() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xml,.csv,.json"
+            accept=".xml,.csv,.json,.xlsx,.xls"
             onChange={handleFileSelect}
             className="hidden"
           />

@@ -333,7 +333,8 @@ journalEntrySchema.statics.computeHash = function(entryData, prevHash = '0') {
   };
 
   const payload = JSON.stringify(stableData);
-  const hmacSecret = process.env.HMAC_SECRET || 'dev_secret';
+  const hmacSecret = process.env.HMAC_SECRET;
+  if (!hmacSecret) throw new Error('HMAC_SECRET environment variable is required');
 
   return crypto.createHmac('sha256', hmacSecret).update(payload).digest('hex');
 };
@@ -341,7 +342,8 @@ journalEntrySchema.statics.computeHash = function(entryData, prevHash = '0') {
 // Instance method to verify hash
 journalEntrySchema.methods.verifyHash = function() {
   const computedHash = this.constructor.computeHash(this.toObject(), this.prevHash);
-  return computedHash === this.hash;
+  if (computedHash.length !== this.hash.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(computedHash, 'hex'), Buffer.from(this.hash, 'hex'));
 };
 
 // Instance method to verify entire chain from this entry back to genesis
@@ -403,7 +405,9 @@ journalEntrySchema.methods.calculateHash = function() {
     status: this.status,
   };
   
-  const hmac = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'default-secret');
+  const hmacSecret = process.env.HMAC_SECRET;
+  if (!hmacSecret) throw new Error('HMAC_SECRET environment variable is required');
+  const hmac = crypto.createHmac('sha256', hmacSecret);
   hmac.update(JSON.stringify(payload));
   return hmac.digest('hex');
 };
@@ -411,24 +415,26 @@ journalEntrySchema.methods.calculateHash = function() {
 // Generate entry number and hash
 journalEntrySchema.pre('save', async function(next) {
   if (this.isNew && !this.entryNumber) {
+    const Counter = mongoose.model('Counter');
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await mongoose.model('JournalEntry').countDocuments({
-      entryNumber: new RegExp(`^JE-${dateStr}`)
-    });
-    this.entryNumber = `JE-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+    const seq = await Counter.getNextSequence('journalEntry', { date: dateStr });
+    this.entryNumber = `JE-${dateStr}-${String(seq).padStart(4, '0')}`;
   }
   
   // Set chain position for new entries
   if (this.isNew) {
+    const Counter = mongoose.model('Counter');
+    const chainPos = await Counter.getNextSequence('journalChain');
+    this.chainPosition = chainPos - 1;
+    
     const lastEntry = await mongoose.model('JournalEntry')
       .findOne({ status: { $in: ['POSTED', 'posted'] } })
       .sort({ chainPosition: -1 })
-      .select('chainPosition hash');
+      .select('hash');
     
-    this.chainPosition = lastEntry ? lastEntry.chainPosition + 1 : 0;
     this.prevHash = lastEntry ? lastEntry.hash : '0';
-    this.prev_hash = this.prevHash; // Backward compatibility
+    this.prev_hash = this.prevHash;
   }
   
   // Calculate hash after entryNumber is set

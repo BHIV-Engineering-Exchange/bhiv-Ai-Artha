@@ -15,7 +15,7 @@
  * returning { allowed: true } when no capability context exists.
  */
 
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readFile, readdir, access } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import logger from '../config/logger.js';
@@ -46,16 +46,19 @@ let _contractsLoadFailed = false;
  * Load authority definitions from capability contract JSON files.
  * This is the SINGLE SOURCE OF TRUTH — no hardcoded maps.
  */
-function loadContractsFromRegistry() {
+async function loadContractsFromRegistry() {
   if (_contractsLoaded) return;
 
-  // Find the contracts directory (try primary path, then fallbacks)
   let contractsDir = CONTRACT_DIR;
   let routeMapPath = ROUTE_MAP_FILE;
 
-  if (!existsSync(contractsDir)) {
+  const dirExists = async (p) => {
+    try { await access(p); return true; } catch { return false; }
+  };
+
+  if (!(await dirExists(contractsDir))) {
     for (const fallback of FALLBACK_CONTRACT_DIRS) {
-      if (existsSync(fallback)) {
+      if (await dirExists(fallback)) {
         contractsDir = fallback;
         routeMapPath = join(fallback, 'capability_route_map.json');
         logger.info(`[AUTHORITY] Using fallback contract directory: ${fallback}`);
@@ -65,18 +68,19 @@ function loadContractsFromRegistry() {
   }
 
   try {
-    if (!existsSync(contractsDir)) {
+    if (!(await dirExists(contractsDir))) {
       logger.warn(`[AUTHORITY] Contract directory not found: ${contractsDir}. Authority enforcement will be permissive.`);
       _contractsLoadFailed = true;
       _contractsLoaded = true;
       return;
     }
 
-    const contractFiles = readdirSync(contractsDir).filter(f => f.endsWith('.json') && !f.includes('route_map'));
+    const files = await readdir(contractsDir);
+    const contractFiles = files.filter(f => f.endsWith('.json') && !f.includes('route_map'));
 
     for (const file of contractFiles) {
       try {
-        const raw = readFileSync(join(contractsDir, file), 'utf-8');
+        const raw = await readFile(join(contractsDir, file), 'utf-8');
         const contract = JSON.parse(raw);
         const capId = contract.capability_id;
         if (!capId) continue;
@@ -97,10 +101,9 @@ function loadContractsFromRegistry() {
       }
     }
 
-    // Load route-to-capability mapping
-    if (existsSync(routeMapPath)) {
+    if (await dirExists(routeMapPath)) {
       try {
-        const raw = readFileSync(routeMapPath, 'utf-8');
+        const raw = await readFile(routeMapPath, 'utf-8');
         const map = JSON.parse(raw);
         ROUTE_CAPABILITY_MAP = map.routes || [];
       } catch (err) {
@@ -244,9 +247,8 @@ function buildFallbackRouteMap() {
  *
  * This is NOT optional — it runs on every request.
  */
-export function authorityEnforcement(req, res, next) {
-  // Ensure contracts are loaded (lazy init)
-  loadContractsFromRegistry();
+export async function authorityEnforcement(req, res, next) {
+  await loadContractsFromRegistry();
 
   const path = req.originalUrl || req.path;
   const method = req.method;
@@ -323,10 +325,9 @@ export function authorityEnforcement(req, res, next) {
  * Usage: app.use('/api/v1/ledger', capabilityGuard('ARTHA-LEDGER-001'), ledgerRoutes);
  */
 export function capabilityGuard(capabilityId) {
-  // Ensure contracts are loaded
-  loadContractsFromRegistry();
+  return async (req, res, next) => {
+    await loadContractsFromRegistry();
 
-  return (req, res, next) => {
     if (!AUTHORITY_MAP[capabilityId]) {
       logger.error(`[AUTHORITY] Unknown capability in guard: ${capabilityId}`);
       return res.status(500).json({
@@ -370,22 +371,10 @@ export function guardCollectionAccess(req, collectionName) {
   const capability = req.capability;
 
   if (!capability || capability === 'UNMAPPED') {
-    // No capability context = authority middleware was bypassed or contracts unavailable
-    if (process.env.NODE_ENV === 'production' && !_contractsLoadFailed) {
-      throw new Error(
-        `[AUTHORITY] FATAL: No capability context for ${collectionName}. ` +
-        `Request was not routed through authority middleware.`
-      );
-    }
-    // In development or when contracts are unavailable, allow
-    if (_contractsLoadFailed) {
-      return { allowed: true, reason: 'Contracts unavailable (permissive mode)' };
-    }
-    logger.warn(
-      `[AUTHORITY] No capability context for ${collectionName}. ` +
-      `Ensure authorityEnforcement middleware is mounted.`
+    throw new Error(
+      `[AUTHORITY] FATAL: No capability context for ${collectionName}. ` +
+      `Request was not routed through authority middleware.`
     );
-    return { allowed: true, reason: 'No capability context (development mode)' };
   }
 
   const authority = AUTHORITY_MAP[capability];
@@ -393,7 +382,6 @@ export function guardCollectionAccess(req, collectionName) {
     throw new Error(`[AUTHORITY] Unknown capability: ${capability}`);
   }
 
-  // Read-only capabilities cannot mutate
   if (authority.read_only) {
     const violation = {
       type: 'READ_ONLY_MUTATION',
@@ -405,7 +393,6 @@ export function guardCollectionAccess(req, collectionName) {
     throw new Error(`[AUTHORITY] ${capability} is read-only and cannot mutate ${collectionName}`);
   }
 
-  // Check blocked mutations
   if (authority.blocked_mutations && authority.blocked_mutations[collectionName]) {
     const violation = {
       type: 'COLLECTION_BLOCKED',
@@ -426,7 +413,7 @@ export function guardCollectionAccess(req, collectionName) {
  * Authority violation logger.
  * Records all violations to structured logging and file.
  */
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync, mkdirSync, existsSync } from 'fs';
 
 export function logAuthorityViolation(req, violation) {
   const logEntry = {
@@ -458,16 +445,16 @@ export function logAuthorityViolation(req, violation) {
 /**
  * Get authority definition for a capability (for introspection/debugging).
  */
-export function getAuthorityDefinition(capabilityId) {
-  loadContractsFromRegistry();
+export async function getAuthorityDefinition(capabilityId) {
+  await loadContractsFromRegistry();
   return AUTHORITY_MAP[capabilityId] || null;
 }
 
 /**
  * List all capability authority boundaries.
  */
-export function listAllAuthorityBoundaries() {
-  loadContractsFromRegistry();
+export async function listAllAuthorityBoundaries() {
+  await loadContractsFromRegistry();
   return Object.entries(AUTHORITY_MAP).map(([id, auth]) => ({
     capability_id: id,
     capability_name: auth.capability_name,
@@ -484,8 +471,8 @@ export function listAllAuthorityBoundaries() {
  * Verify a specific capability's contract against runtime state.
  * Used by the independent verifier (Fix #3).
  */
-export function verifyCapabilityIntegrity(capabilityId) {
-  loadContractsFromRegistry();
+export async function verifyCapabilityIntegrity(capabilityId) {
+  await loadContractsFromRegistry();
   const auth = AUTHORITY_MAP[capabilityId];
   if (!auth) return { valid: false, error: 'Capability not found' };
 
@@ -538,7 +525,6 @@ export default {
   listAllAuthorityBoundaries,
   verifyCapabilityIntegrity,
   loadContractsFromRegistry,
-  // Expose for testing
-  get AUTHORITY_MAP() { loadContractsFromRegistry(); return AUTHORITY_MAP; },
-  get ROUTE_CAPABILITY_MAP() { loadContractsFromRegistry(); return ROUTE_CAPABILITY_MAP; },
+  get AUTHORITY_MAP() { return AUTHORITY_MAP; },
+  get ROUTE_CAPABILITY_MAP() { return ROUTE_CAPABILITY_MAP; },
 };

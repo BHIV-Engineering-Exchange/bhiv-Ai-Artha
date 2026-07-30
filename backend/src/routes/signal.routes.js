@@ -26,7 +26,7 @@ router.get('/', listSignals);
 router.get('/trace/:traceId', reconstructTrace);
 
 // Pipeline dry-run check (Phase 2A)
-router.get('/:signalId/pipeline-check', authorize('admin', 'accountant'), pipelineCheck);
+router.get('/:signalId/pipeline-check', authorize('admin', 'accountant', 'viewer'), pipelineCheck);
 
 // SETU dispatch — real HTTP attempt with explicit result (Phase 2A)
 router.post('/:signalId/dispatch', authorize('admin', 'accountant'), dispatchSignal);

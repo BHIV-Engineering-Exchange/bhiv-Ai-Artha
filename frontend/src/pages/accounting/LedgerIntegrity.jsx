@@ -43,21 +43,8 @@ const LedgerIntegrity = () => {
       setEntries(entriesResponse.data.data || []);
     } catch (error) {
       console.error('Failed to fetch integrity status:', error);
-      // Sample data
-      setVerificationResult({
-        isValid: true,
-        totalEntries: 156,
-        verifiedEntries: 156,
-        brokenChainAt: null,
-        lastVerified: new Date().toISOString(),
-      });
-      setEntries([
-        { _id: '1', entryNumber: 'JE-2026-0001', date: '2026-02-01', description: 'Sales Invoice', hash: 'a1b2c3d4...', prevHash: 'genesis', isValid: true },
-        { _id: '2', entryNumber: 'JE-2026-0002', date: '2026-02-05', description: 'Rent Payment', hash: 'e5f6g7h8...', prevHash: 'a1b2c3d4...', isValid: true },
-        { _id: '3', entryNumber: 'JE-2026-0003', date: '2026-02-08', description: 'Salary Payment', hash: 'i9j0k1l2...', prevHash: 'e5f6g7h8...', isValid: true },
-        { _id: '4', entryNumber: 'JE-2026-0004', date: '2026-02-10', description: 'Customer Payment', hash: 'm3n4o5p6...', prevHash: 'i9j0k1l2...', isValid: true },
-        { _id: '5', entryNumber: 'JE-2026-0005', date: '2026-02-12', description: 'Inventory Purchase', hash: 'q7r8s9t0...', prevHash: 'm3n4o5p6...', isValid: true },
-      ]);
+      setVerificationResult(null);
+      setEntries([]);
     } finally {
       setLoading(false);
     }

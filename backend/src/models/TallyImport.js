@@ -17,7 +17,7 @@ const tallyImportSchema = new mongoose.Schema({
   },
   format: {
     type: String,
-    enum: ['xml', 'csv', 'json'],
+    enum: ['xml', 'csv', 'json', 'xlsx'],
     default: 'xml',
   },
   companyId: {

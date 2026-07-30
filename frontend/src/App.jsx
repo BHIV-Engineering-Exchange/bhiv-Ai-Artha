@@ -2,54 +2,44 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 
-// Layout
+import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/layout/Layout';
 import AuthLayout from './components/layout/AuthLayout';
 
-// Auth Pages
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
 
-// Dashboard
 import FinancialIntelligenceDashboard from './pages/dashboard/FinancialIntelligenceDashboard';
 
-// Invoices
 import InvoiceList from './pages/invoices/InvoiceList';
 import InvoiceCreate from './pages/invoices/InvoiceCreate';
 import InvoiceView from './pages/invoices/InvoiceView';
 
-// Expenses
 import ExpenseList from './pages/expenses/ExpenseList';
 import ExpenseCreate from './pages/expenses/ExpenseCreate';
 import ExpenseApproval from './pages/expenses/ExpenseApproval';
 
-// Accounting
 import ChartOfAccounts from './pages/accounting/ChartOfAccounts';
 import JournalEntries from './pages/accounting/JournalEntries';
 import JournalEntryCreate from './pages/accounting/JournalEntryCreate';
 import LedgerIntegrity from './pages/accounting/LedgerIntegrity';
 
-// Reports
 import ProfitLoss from './pages/reports/ProfitLoss';
 import BalanceSheet from './pages/reports/BalanceSheet';
 import CashFlow from './pages/reports/CashFlow';
 import TrialBalance from './pages/reports/TrialBalance';
 import AgedReceivables from './pages/reports/AgedReceivables';
 
-// Compliance
 import GSTDashboard from './pages/compliance/GSTDashboard';
 import TDSManagement from './pages/compliance/TDSManagement';
 import SignalDashboard from './pages/compliance/SignalDashboard';
 
-// Statements
 import StatementsList from './pages/statements/StatementsList';
 import StatementsUpload from './pages/statements/StatementsUpload';
 import StatementDetail from './pages/statements/StatementDetail';
 
-// Data Ingestion
 import DataIngestion from './pages/ingestion/DataIngestion';
 
-// Settings
 import CompanySettings from './pages/settings/CompanySettings';
 import UserManagement from './pages/settings/UserManagement';
 
@@ -86,7 +76,15 @@ const RoleProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  const userRoles = user?.roles || [user?.role];
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  const userRoles = user.roles || (user.role ? [user.role] : []);
   const hasAccess = allowedRoles.some(r => userRoles.includes(r));
 
   if (!hasAccess) {
@@ -135,57 +133,56 @@ function App() {
   }, [checkAuth]);
 
   return (
-    <Routes>
-      {/* Auth Routes */}
-      <Route element={<AuthLayout />}>
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
-      </Route>
+    <ErrorBoundary>
+      <Routes>
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+        </Route>
 
-      {/* Protected Routes */}
-      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<FinancialIntelligenceDashboard />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<FinancialIntelligenceDashboard />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        <Route path="/invoices" element={<InvoiceList />} />
-        <Route path="/invoices/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><InvoiceCreate /></RoleProtectedRoute>} />
-        <Route path="/invoices/:id" element={<InvoiceView />} />
-        <Route path="/invoices/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><InvoiceCreate /></RoleProtectedRoute>} />
+          <Route path="/invoices" element={<InvoiceList />} />
+          <Route path="/invoices/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><InvoiceCreate /></RoleProtectedRoute>} />
+          <Route path="/invoices/:id" element={<InvoiceView />} />
+          <Route path="/invoices/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><InvoiceCreate /></RoleProtectedRoute>} />
 
-        <Route path="/expenses" element={<ExpenseList />} />
-        <Route path="/expenses/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseCreate /></RoleProtectedRoute>} />
-        <Route path="/expenses/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseCreate /></RoleProtectedRoute>} />
-        <Route path="/expenses/approval" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseApproval /></RoleProtectedRoute>} />
+          <Route path="/expenses" element={<ExpenseList />} />
+          <Route path="/expenses/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseCreate /></RoleProtectedRoute>} />
+          <Route path="/expenses/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseCreate /></RoleProtectedRoute>} />
+          <Route path="/expenses/approval" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ExpenseApproval /></RoleProtectedRoute>} />
 
-        <Route path="/accounts" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ChartOfAccounts /></RoleProtectedRoute>} />
-        <Route path="/journal-entries" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntries /></RoleProtectedRoute>} />
-        <Route path="/journal-entries/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntryCreate /></RoleProtectedRoute>} />
-        <Route path="/journal-entries/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntryCreate /></RoleProtectedRoute>} />
-        <Route path="/ledger-integrity" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><LedgerIntegrity /></RoleProtectedRoute>} />
+          <Route path="/accounts" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><ChartOfAccounts /></RoleProtectedRoute>} />
+          <Route path="/journal-entries" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntries /></RoleProtectedRoute>} />
+          <Route path="/journal-entries/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntryCreate /></RoleProtectedRoute>} />
+          <Route path="/journal-entries/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><JournalEntryCreate /></RoleProtectedRoute>} />
+          <Route path="/ledger-integrity" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><LedgerIntegrity /></RoleProtectedRoute>} />
 
-        <Route path="/reports/profit-loss" element={<ProfitLoss />} />
-        <Route path="/reports/balance-sheet" element={<BalanceSheet />} />
-        <Route path="/reports/cash-flow" element={<CashFlow />} />
-        <Route path="/reports/trial-balance" element={<TrialBalance />} />
-        <Route path="/reports/aged-receivables" element={<AgedReceivables />} />
+          <Route path="/reports/profit-loss" element={<ProfitLoss />} />
+          <Route path="/reports/balance-sheet" element={<BalanceSheet />} />
+          <Route path="/reports/cash-flow" element={<CashFlow />} />
+          <Route path="/reports/trial-balance" element={<TrialBalance />} />
+          <Route path="/reports/aged-receivables" element={<AgedReceivables />} />
 
-        <Route path="/gst" element={<GSTDashboard />} />
-        <Route path="/tds" element={<TDSManagement />} />
-        <Route path="/signals" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><SignalDashboard /></RoleProtectedRoute>} />
+          <Route path="/gst" element={<GSTDashboard />} />
+          <Route path="/tds" element={<TDSManagement />} />
+          <Route path="/signals" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><SignalDashboard /></RoleProtectedRoute>} />
 
-        <Route path="/ingestion" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DataIngestion /></RoleProtectedRoute>} />
+          <Route path="/ingestion" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DataIngestion /></RoleProtectedRoute>} />
 
-        <Route path="/statements" element={<StatementsList />} />
-        <Route path="/statements/upload" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><StatementsUpload /></RoleProtectedRoute>} />
-        <Route path="/statements/:id" element={<StatementDetail />} />
+          <Route path="/statements" element={<StatementsList />} />
+          <Route path="/statements/upload" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><StatementsUpload /></RoleProtectedRoute>} />
+          <Route path="/statements/:id" element={<StatementDetail />} />
 
-        <Route path="/settings/company" element={<RoleProtectedRoute allowedRoles={['admin']}><CompanySettings /></RoleProtectedRoute>} />
-        <Route path="/settings/users" element={<RoleProtectedRoute allowedRoles={['admin']}><UserManagement /></RoleProtectedRoute>} />
-      </Route>
+          <Route path="/settings/company" element={<RoleProtectedRoute allowedRoles={['admin']}><CompanySettings /></RoleProtectedRoute>} />
+          <Route path="/settings/users" element={<RoleProtectedRoute allowedRoles={['admin']}><UserManagement /></RoleProtectedRoute>} />
+        </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }
 

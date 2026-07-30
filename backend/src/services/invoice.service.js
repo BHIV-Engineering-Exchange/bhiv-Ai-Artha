@@ -99,14 +99,16 @@ class InvoiceService {
     }
     
     if (customerName) {
-      query.customerName = { $regex: customerName, $options: 'i' };
+      const safeName = customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.customerName = { $regex: safeName, $options: 'i' };
     }
     
     if (search) {
+      const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { invoiceNumber: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerEmail: { $regex: search, $options: 'i' } },
+        { invoiceNumber: { $regex: safeSearch, $options: 'i' } },
+        { customerName: { $regex: safeSearch, $options: 'i' } },
+        { customerEmail: { $regex: safeSearch, $options: 'i' } },
       ];
     }
     
@@ -165,8 +167,18 @@ class InvoiceService {
     if (invoice.status === 'cancelled') {
       throw new Error('Cannot update a cancelled invoice');
     }
+
+    const allowedFields = [
+      'customerName', 'customerEmail', 'customerAddress', 'customerState',
+      'customerGSTIN', 'dueDate', 'items', 'lines', 'taxRate', 'notes',
+    ];
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        invoice[field] = updateData[field];
+      }
+    }
     
-    Object.assign(invoice, updateData);
     await invoice.save();
     
     logger.info(`Invoice updated: ${invoice.invoiceNumber}`);
@@ -588,59 +600,145 @@ class InvoiceService {
    * Cancel invoice
    */
   async cancelInvoice(invoiceId, reason, userId) {
-    const invoice = await Invoice.findById(invoiceId);
+    const { withTransaction } = await import('../config/database.js');
     
-    if (!invoice) {
-      throw new Error('Invoice not found');
-    }
-    
-    if (invoice.status === 'paid' || invoice.status === 'partial') {
-      throw new Error('Cannot cancel an invoice with payments');
-    }
-    
-    const traceId = invoice.trace_id || randomUUID();
-    
-    invoice.status = 'cancelled';
-    invoice.notes = (invoice.notes || '') + `\nCancelled: ${reason}`;
-    await invoice.save();
-    
-    // Audit trail
-    await auditService.recordEvent({
-      eventType: 'INVOICE_CANCELLED',
-      entityType: 'Invoice',
-      entityId: invoice._id,
-      traceId,
-      userId,
-      details: {
-        invoiceNumber: invoice.invoiceNumber,
-        customerName: invoice.customerName,
-        totalAmount: invoice.totalAmount,
-        reason,
-        status: invoice.status,
-      },
+    return await withTransaction(async (session) => {
+      const invoice = session 
+        ? await Invoice.findById(invoiceId).session(session) 
+        : await Invoice.findById(invoiceId);
+      
+      if (!invoice) {
+        throw new Error('Invoice not found');
+      }
+      
+      if (invoice.status === 'paid' || invoice.status === 'partial') {
+        throw new Error('Cannot cancel an invoice with payments');
+      }
+
+      if (invoice.status === 'cancelled') {
+        throw new Error('Invoice is already cancelled');
+      }
+      
+      const traceId = invoice.trace_id || randomUUID();
+
+      if (invoice.status === 'sent') {
+        let arAccount = await ChartOfAccounts.findOne({ code: '1100' }).session(session);
+        let revenueAccount = await ChartOfAccounts.findOne({ code: '4000' }).session(session);
+        let outputCGST = await ChartOfAccounts.findOne({ code: '2311' }).session(session);
+        let outputSGST = await ChartOfAccounts.findOne({ code: '2312' }).session(session);
+        let outputIGST = await ChartOfAccounts.findOne({ code: '2313' }).session(session);
+
+        const totalAmount = new Decimal(invoice.totalAmount || 0);
+        const taxableAmount = new Decimal(invoice.subtotal || 0);
+        const cgst = new Decimal(invoice.gstBreakdown?.cgst || 0);
+        const sgst = new Decimal(invoice.gstBreakdown?.sgst || 0);
+        const igst = new Decimal(invoice.gstBreakdown?.igst || 0);
+
+        const reversingLines = [];
+
+        if (arAccount) {
+          reversingLines.push({
+            account: arAccount._id,
+            debit: '0',
+            credit: totalAmount.toString(),
+            description: `Reverse AR for cancelled invoice ${invoice.invoiceNumber}`,
+          });
+        }
+
+        if (revenueAccount) {
+          reversingLines.push({
+            account: revenueAccount._id,
+            debit: taxableAmount.toString(),
+            credit: '0',
+            description: `Reverse revenue for cancelled invoice ${invoice.invoiceNumber}`,
+          });
+        }
+
+        if (outputCGST && cgst.greaterThan(0)) {
+          reversingLines.push({
+            account: outputCGST._id,
+            debit: cgst.toString(),
+            credit: '0',
+            description: 'Reverse Output CGST',
+          });
+        }
+
+        if (outputSGST && sgst.greaterThan(0)) {
+          reversingLines.push({
+            account: outputSGST._id,
+            debit: sgst.toString(),
+            credit: '0',
+            description: 'Reverse Output SGST',
+          });
+        }
+
+        if (outputIGST && igst.greaterThan(0)) {
+          reversingLines.push({
+            account: outputIGST._id,
+            debit: igst.toString(),
+            credit: '0',
+            description: 'Reverse Output IGST',
+          });
+        }
+
+        if (reversingLines.length >= 2) {
+          const reversalEntry = await ledgerService.createJournalEntry(
+            {
+              date: new Date(),
+              description: `Reversal for cancelled invoice ${invoice.invoiceNumber}: ${reason}`,
+              lines: reversingLines,
+              reference: invoice.invoiceNumber,
+              tags: ['invoice-cancellation', invoice.invoiceNumber],
+              source: 'SYSTEM',
+              trace_id: traceId,
+              auditAction: 'INVOICE_CANCELLED_REVERSAL',
+            },
+            userId
+          );
+          await ledgerService.validateJournalEntry(reversalEntry._id, userId);
+          await ledgerService.postJournalEntry(reversalEntry._id, userId);
+        }
+      }
+      
+      invoice.status = 'cancelled';
+      invoice.notes = (invoice.notes || '') + `\nCancelled: ${reason}`;
+      await invoice.save({ session });
+      
+      await auditService.recordEvent({
+        eventType: 'INVOICE_CANCELLED',
+        entityType: 'Invoice',
+        entityId: invoice._id,
+        traceId,
+        userId,
+        details: {
+          invoiceNumber: invoice.invoiceNumber,
+          customerName: invoice.customerName,
+          totalAmount: invoice.totalAmount,
+          reason,
+          status: invoice.status,
+        },
+      });
+      
+      await evidenceAutomationService.captureAPIResponse({
+        operation: 'cancelInvoice',
+        entityType: 'Invoice',
+        entityId: invoice._id,
+        request: { invoiceId, reason, userId },
+        response: { success: true, invoiceNumber: invoice.invoiceNumber, status: invoice.status },
+        traceId,
+      });
+      
+      await tantraService.emitEvent({
+        event: 'INVOICE_CANCELLED',
+        entityType: 'Invoice',
+        entityId: invoice._id,
+        details: { invoiceNumber: invoice.invoiceNumber, reason },
+      });
+      
+      logger.info(`Invoice cancelled: ${invoice.invoiceNumber}`);
+      
+      return invoice;
     });
-    
-    // Capture evidence
-    await evidenceAutomationService.captureAPIResponse({
-      operation: 'cancelInvoice',
-      entityType: 'Invoice',
-      entityId: invoice._id,
-      request: { invoiceId, reason, userId },
-      response: { success: true, invoiceNumber: invoice.invoiceNumber, status: invoice.status },
-      traceId,
-    });
-    
-    // Emit TANTRA event
-    await tantraService.emitEvent({
-      event: 'INVOICE_CANCELLED',
-      entityType: 'Invoice',
-      entityId: invoice._id,
-      details: { invoiceNumber: invoice.invoiceNumber, reason },
-    });
-    
-    logger.info(`Invoice cancelled: ${invoice.invoiceNumber}`);
-    
-    return invoice;
   }
   
   /**

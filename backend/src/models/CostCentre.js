@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import { randomUUID } from 'crypto';
 
+const validateDecimal = {
+  validator: (v) => v === '' || v === null || v === undefined || (!isNaN(Number(v)) && isFinite(Number(v))),
+  message: '{VALUE} is not a valid decimal amount',
+};
+
 const costCentreSchema = new mongoose.Schema({
   centreId: {
     type: String,
@@ -46,9 +51,9 @@ const costCentreSchema = new mongoose.Schema({
     default: true,
   },
   budget: {
-    allocated: String,
-    spent: String,
-    variance: String,
+    allocated: { type: String, default: '0', validate: validateDecimal },
+    spent: { type: String, default: '0', validate: validateDecimal },
+    variance: { type: String, default: '0', validate: validateDecimal },
   },
   // Link to accounts
   linkedAccounts: [{

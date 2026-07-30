@@ -19,31 +19,29 @@ import {
   getExpenseBreakdown,
   getBankTransactionTimeline,
 } from '../controllers/reports.controller.js';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(protect);
 
-// Routes
-router.route('/general-ledger').get(exportGeneralLedger);
-router.route('/profit-loss').get(getProfitLoss);
-router.route('/profit-loss/export').get(exportProfitLossPDF);
-router.route('/balance-sheet').get(getBalanceSheet);
-router.route('/balance-sheet/export').get(exportBalanceSheetPDF);
-router.route('/cash-flow').get(getCashFlow);
-router.route('/cash-flow/export').get(exportCashFlowPDF);
-router.route('/trial-balance').get(getTrialBalance);
-router.route('/trial-balance/export').get(exportTrialBalancePDF);
-router.route('/aged-receivables').get(getAgedReceivables);
-router.route('/dashboard').get(getDashboardSummary);
-router.route('/period-context').get(getReportPeriodContext);
-router.route('/gst-summary').get(getGSTSummaryReport);
-router.route('/tds-summary').get(getTDSSummaryReport);
-router.route('/kpis').get(getKPIs);
-router.route('/revenue-expenses-chart').get(getRevenueExpensesChart);
-router.route('/expense-breakdown').get(getExpenseBreakdown);
-router.route('/bank-transaction-timeline').get(getBankTransactionTimeline);
+router.route('/general-ledger').get(authorize('admin', 'accountant', 'viewer'), exportGeneralLedger);
+router.route('/profit-loss').get(authorize('admin', 'accountant', 'viewer'), getProfitLoss);
+router.route('/profit-loss/export').get(authorize('admin'), exportProfitLossPDF);
+router.route('/balance-sheet').get(authorize('admin', 'accountant', 'viewer'), getBalanceSheet);
+router.route('/balance-sheet/export').get(authorize('admin'), exportBalanceSheetPDF);
+router.route('/cash-flow').get(authorize('admin', 'accountant', 'viewer'), getCashFlow);
+router.route('/cash-flow/export').get(authorize('admin'), exportCashFlowPDF);
+router.route('/trial-balance').get(authorize('admin', 'accountant', 'viewer'), getTrialBalance);
+router.route('/trial-balance/export').get(authorize('admin'), exportTrialBalancePDF);
+router.route('/aged-receivables').get(authorize('admin', 'accountant', 'viewer'), getAgedReceivables);
+router.route('/dashboard').get(authorize('admin', 'accountant', 'viewer'), getDashboardSummary);
+router.route('/period-context').get(authorize('admin', 'accountant', 'viewer'), getReportPeriodContext);
+router.route('/gst-summary').get(authorize('admin', 'accountant', 'viewer'), getGSTSummaryReport);
+router.route('/tds-summary').get(authorize('admin', 'accountant', 'viewer'), getTDSSummaryReport);
+router.route('/kpis').get(authorize('admin', 'accountant', 'viewer'), getKPIs);
+router.route('/revenue-expenses-chart').get(authorize('admin', 'accountant', 'viewer'), getRevenueExpensesChart);
+router.route('/expense-breakdown').get(authorize('admin', 'accountant', 'viewer'), getExpenseBreakdown);
+router.route('/bank-transaction-timeline').get(authorize('admin', 'accountant', 'viewer'), getBankTransactionTimeline);
 
 export default router;

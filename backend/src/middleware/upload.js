@@ -142,19 +142,20 @@ const tallyStorage = multer.diskStorage({
 
 const tallyFileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  const allowedExtensions = ['.xml', '.csv', '.json'];
+  const allowedExtensions = ['.xml', '.csv', '.json', '.xlsx', '.xls'];
   const allowedTypes = [
     'text/xml', 'application/xml',
     'text/csv',
     'application/json',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel.sheet.macroEnabled.12',
   ];
 
   if (allowedExtensions.includes(ext) || allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only XML, CSV, and JSON files are allowed for Tally import.'), false);
+    cb(new Error('Invalid file type. Only XML, CSV, JSON, XLS, and XLSX files are allowed.'), false);
   }
 };
 

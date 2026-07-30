@@ -4,16 +4,48 @@ import logger from '../config/logger.js';
 
 class AuditService {
   constructor() {
-    this.lastHash = null;
-    this.chainPosition = 0;
+    this._initialized = false;
+    this._initPromise = null;
   }
 
   async init() {
-    const lastEvent = await AuditEvent.findOne({}).sort({ chainPosition: -1 }).select('hash chainPosition');
-    if (lastEvent) {
-      this.lastHash = lastEvent.hash;
-      this.chainPosition = lastEvent.chainPosition;
+    if (this._initialized) return;
+    if (this._initPromise) return this._initPromise;
+
+    this._initPromise = this._doInit();
+    await this._initPromise;
+    this._initialized = true;
+  }
+
+  async _doInit() {
+    try {
+      const lastEvent = await AuditEvent.findOne({}).sort({ chainPosition: -1 }).select('hash chainPosition');
+      if (lastEvent) {
+        this._lastHash = lastEvent.hash;
+        this._chainPosition = lastEvent.chainPosition;
+      } else {
+        this._lastHash = '0';
+        this._chainPosition = 0;
+      }
+    } catch (err) {
+      logger.error('AuditService init failed:', err);
+      this._lastHash = '0';
+      this._chainPosition = 0;
     }
+  }
+
+  async _getNextPositionAndHash(eventData) {
+    await this.init();
+
+    const lastHash = this._lastHash || '0';
+    const nextPosition = (this._chainPosition || 0) + 1;
+
+    const hash = this.computeHash(eventData, lastHash);
+
+    this._lastHash = hash;
+    this._chainPosition = nextPosition;
+
+    return { previousHash: lastHash, chainPosition: nextPosition, hash };
   }
 
   computeHash(eventData, previousHash) {
@@ -32,10 +64,21 @@ class AuditService {
 
   async recordEvent(data) {
     try {
-      if (!this.lastHash) await this.init();
+      await this.init();
 
-      this.chainPosition += 1;
       const eventId = AuditEvent.generateEventId();
+
+      const tempEvent = {
+        eventId,
+        eventType: data.eventType,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        action: data.action,
+        actor: data.actor,
+        createdAt: new Date(),
+      };
+
+      const { previousHash, chainPosition, hash } = await this._getNextPositionAndHash(tempEvent);
 
       const event = new AuditEvent({
         eventId,
@@ -62,12 +105,10 @@ class AuditService {
         correlationId: data.correlationId,
         regulatoryRequired: data.regulatoryRequired || false,
         retentionDays: data.retentionDays || 2555,
-        previousHash: this.lastHash || '0',
-        chainPosition: this.chainPosition,
+        previousHash,
+        chainPosition,
+        hash,
       });
-
-      event.hash = this.computeHash(event.toObject(), this.lastHash);
-      this.lastHash = event.hash;
 
       await event.save();
       return event;
@@ -77,7 +118,6 @@ class AuditService {
     }
   }
 
-  // Verify audit chain integrity
   async verifyChain() {
     const events = await AuditEvent.find({}).sort({ chainPosition: 1 });
     if (events.length === 0) return { isValid: true, totalEntries: 0, errors: [] };
@@ -120,7 +160,6 @@ class AuditService {
     };
   }
 
-  // Get audit trail for an entity
   async getEntityAuditTrail(entityType, entityId, options = {}) {
     const { limit = 50, offset = 0, startDate, endDate } = options;
     const query = { entityType, entityId };
@@ -139,7 +178,6 @@ class AuditService {
     return { events, total, hasMore: offset + limit < total };
   }
 
-  // Get audit summary
   async getAuditSummary(filters = {}) {
     const { startDate, endDate, category, eventType } = filters;
     const match = {};
@@ -184,7 +222,6 @@ class AuditService {
     return { byType, byCategory, bySeverity, byUser, dailyActivity };
   }
 
-  // Record specific audit events
   async recordUserAction(data) {
     return this.recordEvent({ ...data, eventType: 'USER_ACTION', category: data.category || 'system' });
   }
@@ -240,7 +277,6 @@ class AuditService {
     return this.recordEvent({ ...data, eventType: 'LOGOUT', category: 'security', severity: 'info' });
   }
 
-  // Export audit trail
   async exportAuditTrail(filters = {}, format = 'json') {
     const events = await AuditEvent.find(filters).sort({ createdAt: 1 }).lean();
     return events;

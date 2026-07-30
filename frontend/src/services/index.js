@@ -87,6 +87,9 @@ export const dashboardService = {
   getRecentInvoices: () => api.get('/invoices', { params: { limit: 5, sortBy: 'invoiceDate', sortOrder: 'desc' } }),
   getRecentExpenses: () => api.get('/expenses', { params: { limit: 5, sortBy: 'date', sortOrder: 'desc' } }),
   getBankTransactionTimeline: (params) => api.get('/reports/bank-transaction-timeline', { params }),
+  getRevenueChart: (params) => api.get('/reports/revenue-expenses-chart', { params }),
+  getExpenseChart: (params) => api.get('/reports/expense-breakdown', { params }),
+  getPendingApprovals: () => api.get('/expenses', { params: { status: 'pending', limit: 10 } }),
 };
 
 // Settings Services

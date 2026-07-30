@@ -65,11 +65,16 @@ export const generateGSTR3B = async (req, res) => {
 // @access  Private
 export const getGSTReturns = async (req, res) => {
   try {
+    const sanitizeString = (val) => {
+      if (typeof val !== 'string') return val;
+      return val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
     const filters = {
-      returnType: req.query.returnType,
-      year: req.query.year,
-      month: req.query.month,
-      status: req.query.status,
+      returnType: sanitizeString(req.query.returnType),
+      year: sanitizeString(req.query.year),
+      month: sanitizeString(req.query.month),
+      status: sanitizeString(req.query.status),
     };
     
     const returns = await gstService.getGSTReturns(filters);

@@ -20,11 +20,53 @@ class ExpenseService {
    */
   async createExpense(expenseData, userId, files = []) {
     try {
+      const allowedFields = [
+        'vendor', 'description', 'amount', 'category', 'date',
+        'paymentMethod', 'reference', 'tags', 'gstRate', 'supplierState',
+        'taxAmount', 'totalAmount', 'isRecurring', 'recurrencePattern',
+        'frequency', 'nextDueDate', 'isGSTExpense',
+      ];
+      const filtered = {};
+      for (const field of allowedFields) {
+        if (expenseData[field] !== undefined) {
+          filtered[field] = expenseData[field];
+        }
+      }
       const expense = new Expense({
-        ...expenseData,
+        ...filtered,
         submittedBy: userId,
       });
-      
+
+      // Auto-calculate GST if gstRate and supplierState provided
+      const gstRate = expense.gstRate;
+      const supplierState = expense.supplierState;
+      const amount = new Decimal(expense.amount || 0);
+      const hasGSTRate = gstRate !== undefined && gstRate !== null && gstRate !== '' && new Decimal(gstRate).greaterThan(0);
+      const hasSupplierState = supplierState && supplierState.trim().length > 0;
+
+      if (hasGSTRate && hasSupplierState) {
+        const settings = await CompanySettings.findById('company_settings');
+        const companyState = settings?.address?.state || (settings?.gstin ? settings.gstin.substring(0, 2) : null);
+
+        if (companyState) {
+          const detail = calculateGSTBreakdown({
+            transaction_type: 'purchase',
+            amount: amount.toDecimalPlaces(2).toString(),
+            gst_rate: gstRate,
+            supplier_state: supplierState,
+            company_state: companyState,
+          });
+
+          const cgst = new Decimal(detail.cgst || 0);
+          const sgst = new Decimal(detail.sgst || 0);
+          const igst = new Decimal(detail.igst || 0);
+          const totalTax = cgst.plus(sgst).plus(igst);
+
+          expense.taxAmount = totalTax.toString();
+          expense.totalAmount = amount.plus(totalTax).toDecimalPlaces(2).toString();
+        }
+      }
+
       // Handle file uploads
       if (files && files.length > 0) {
         expense.receipts = files.map(file => ({
@@ -34,7 +76,7 @@ class ExpenseService {
           size: file.size,
         }));
       }
-      
+
       await expense.save();
       
       // Audit trail
@@ -121,10 +163,11 @@ class ExpenseService {
     }
     
     if (search) {
+      const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { expenseNumber: { $regex: search, $options: 'i' } },
-        { vendor: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { expenseNumber: { $regex: safeSearch, $options: 'i' } },
+        { vendor: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
       ];
     }
     
@@ -183,8 +226,18 @@ class ExpenseService {
     if (expense.status === 'recorded') {
       throw new Error('Cannot update a recorded expense');
     }
-    
-    Object.assign(expense, updateData);
+
+    const allowedFields = [
+      'vendor', 'description', 'amount', 'category', 'date',
+      'paymentMethod', 'reference', 'tags', 'gstRate', 'supplierState',
+      'taxAmount', 'totalAmount', 'isRecurring', 'recurrencePattern',
+      'frequency', 'nextDueDate', 'isGSTExpense',
+    ];
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        expense[field] = updateData[field];
+      }
+    }
     
     // Add new receipts
     if (files && files.length > 0) {
@@ -415,63 +468,62 @@ class ExpenseService {
       let totalSGST = new Decimal(0);
       let totalIGST = new Decimal(0);
       let gstDetails = undefined;
+      let gstCalculated = false;
 
-      if (declaredTaxAmount.greaterThan(0) || (gstRate !== undefined && gstRate !== null && new Decimal(gstRate).greaterThan(0))) {
+      const hasGSTRate = gstRate !== undefined && gstRate !== null && gstRate !== '' && new Decimal(gstRate).greaterThan(0);
+      const hasSupplierState = expense.supplierState && expense.supplierState.trim().length > 0;
+
+      if (hasGSTRate && hasSupplierState) {
         const settings = await CompanySettings.findById('company_settings').session(session);
         const companyState = settings?.address?.state || (settings?.gstin ? settings.gstin.substring(0, 2) : null);
 
-        if (!companyState) {
-          throw buildGSTValidationError('Company state is required for GST', {
-            expenseId: String(expense._id),
+        if (companyState) {
+          const detail = calculateGSTBreakdown({
+            transaction_type: 'purchase',
+            amount: taxableAmount.toDecimalPlaces(2).toString(),
+            gst_rate: gstRate,
+            supplier_state: expense.supplierState,
+            company_state: companyState,
           });
+
+          totalCGST = new Decimal(detail.cgst || 0);
+          totalSGST = new Decimal(detail.sgst || 0);
+          totalIGST = new Decimal(detail.igst || 0);
+          gstCalculated = true;
+          gstDetails = [{
+            ...detail,
+            amount: taxableAmount.toDecimalPlaces(2).toString(),
+          }];
         }
-
-        if (!expense.supplierState) {
-          throw buildGSTValidationError('Supplier state is required for GST', {
-            expenseId: String(expense._id),
-          });
-        }
-
-        if (gstRate === undefined || gstRate === null) {
-          throw buildGSTValidationError('GST rate is required for expense', {
-            expenseId: String(expense._id),
-          });
-        }
-
-        const detail = calculateGSTBreakdown({
-          transaction_type: 'purchase',
-          amount: taxableAmount.toDecimalPlaces(2).toString(),
-          gst_rate: gstRate,
-          supplier_state: expense.supplierState,
-          company_state: companyState,
-        });
-
-        totalCGST = new Decimal(detail.cgst || 0);
-        totalSGST = new Decimal(detail.sgst || 0);
-        totalIGST = new Decimal(detail.igst || 0);
-        gstDetails = [{
-          ...detail,
-          amount: taxableAmount.toDecimalPlaces(2).toString(),
-        }];
       }
 
-      const totalTax = totalCGST.plus(totalSGST).plus(totalIGST);
-      const totalAmount = taxableAmount.plus(totalTax);
+      let totalTax;
+      let totalAmount;
 
-      if (declaredTaxAmount.greaterThan(0) && totalTax.minus(declaredTaxAmount).abs().greaterThan(tolerance)) {
-        throw buildGSTValidationError('Expense tax amount does not match GST calculation', {
-          expenseId: String(expense._id),
-          expected: totalTax.toString(),
-          actual: expense.taxAmount,
-        });
-      }
+      if (gstCalculated) {
+        totalTax = totalCGST.plus(totalSGST).plus(totalIGST);
+        totalAmount = taxableAmount.plus(totalTax);
 
-      if (declaredTotalAmount.greaterThan(0) && totalAmount.minus(declaredTotalAmount).abs().greaterThan(tolerance)) {
-        throw buildGSTValidationError('Expense total amount does not match GST calculation', {
-          expenseId: String(expense._id),
-          expected: totalAmount.toString(),
-          actual: expense.totalAmount,
-        });
+        if (declaredTaxAmount.greaterThan(0) && totalTax.minus(declaredTaxAmount).abs().greaterThan(tolerance)) {
+          throw buildGSTValidationError('Expense tax amount does not match GST calculation', {
+            expenseId: String(expense._id),
+            expected: totalTax.toString(),
+            actual: expense.taxAmount,
+          });
+        }
+
+        if (declaredTotalAmount.greaterThan(0) && totalAmount.minus(declaredTotalAmount).abs().greaterThan(tolerance)) {
+          throw buildGSTValidationError('Expense total amount does not match GST calculation', {
+            expenseId: String(expense._id),
+            expected: totalAmount.toString(),
+            actual: expense.totalAmount,
+          });
+        }
+      } else {
+        totalTax = declaredTaxAmount;
+        totalAmount = declaredTotalAmount.greaterThan(0)
+          ? declaredTotalAmount
+          : taxableAmount.plus(declaredTaxAmount);
       }
 
       expense.taxAmount = totalTax.toString();

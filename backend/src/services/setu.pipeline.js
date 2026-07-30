@@ -62,6 +62,36 @@ export const VALID_ENTITY_TYPES = [
   'COMPLIANCE_FILING',
 ];
 
+// Fallback: infer module + entity_type from signal type when source fields are missing
+const SIGNAL_TYPE_SOURCE_MAP = {
+  SIG_GST_MISMATCH:              { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_EXPENSE_MISMATCH:      { module: 'GST_ENGINE',      entity_type: 'EXPENSE' },
+  SIG_GST_INVALID_RATE:          { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_MIXED_TAX_TYPE:        { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_COMPANY_STATE_MISSING: { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_CUSTOMER_STATE_MISSING:{ module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_MISSING_GSTIN:         { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_PERIOD_MISMATCH:       { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_DUPLICATE_REFERENCE:   { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_GST_NEGATIVE_LIABILITY:    { module: 'GST_ENGINE',      entity_type: 'INVOICE' },
+  SIG_TDS_MISSING_PAN:           { module: 'TDS_ENGINE',      entity_type: 'TDS_ENTRY' },
+  SIG_TDS_INVALID_SECTION:       { module: 'TDS_ENGINE',      entity_type: 'TDS_ENTRY' },
+  SIG_TDS_MISSING_CHALLAN:       { module: 'TDS_ENGINE',      entity_type: 'TDS_ENTRY' },
+  SIG_TDS_EXCESS_DEDUCTION:      { module: 'TDS_ENGINE',      entity_type: 'TDS_ENTRY' },
+  SIG_TDS_MISSING_EMPLOYEE_PAN:  { module: 'TDS_ENGINE',      entity_type: 'TDS_ENTRY' },
+  SIG_LEDGER_IMBALANCE:          { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_LEDGER_HASH_TAMPER:        { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_LEDGER_CHAIN_BREAK:        { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_LEDGER_INVALID_ACCOUNT:    { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_LEDGER_LINE_INTEGRITY:     { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_CASHFLOW_NEGATIVE:         { module: 'LEDGER',          entity_type: 'JOURNAL_ENTRY' },
+  SIG_INVOICE_OVERDUE:           { module: 'INVOICE',         entity_type: 'INVOICE' },
+  SIG_INVOICE_OVERPAYMENT:       { module: 'INVOICE',         entity_type: 'INVOICE' },
+  SIG_EXPENSE_RECORD_FAILED:     { module: 'EXPENSE',         entity_type: 'EXPENSE' },
+  SIG_FILING_NOT_READY:          { module: 'COMPLIANCE_FILING', entity_type: 'COMPLIANCE_FILING' },
+  SIG_FILING_GENERATED:          { module: 'COMPLIANCE_FILING', entity_type: 'COMPLIANCE_FILING' },
+};
+
 // Trace ID format: TRC-YYYYMMDD-{8 hex chars}
 const TRACE_ID_REGEX = /^TRC-\d{8}-[a-f0-9]{8}$/i;
 
@@ -90,8 +120,11 @@ export function normalizeSignal(raw) {
     throw new NormalizationError('Signal must be a non-null object', 'root');
   }
 
-  // signal_id: accept model auto-generated "SIG-<uuid>" OR typed "SIG_GST_MISMATCH"
-  const signalId = String(raw.signal_id || raw.type || '').trim();
+  // signal_id: prefer typed signal name (SIG_INVOICE_OVERDUE) over auto-generated UUID (SIG-<uuid>)
+  const rawType = String(raw.type || '').trim();
+  const rawSignalId = String(raw.signal_id || '').trim();
+  const isKnownType = VALID_SIGNAL_TYPES.includes(rawType);
+  const signalId = isKnownType ? rawType : (rawSignalId || rawType || '');
   if (!signalId) {
     throw new NormalizationError('signal_id or type is required', 'signal_id');
   }
@@ -125,6 +158,20 @@ export function normalizeSignal(raw) {
       entity_type: String(ctxSource.entity_type || ctx.entity_type || 'UNKNOWN'),
       entity_id:   String(ctxSource.entity_id   || ctx.entity_id   || 'UNKNOWN'),
     };
+  }
+
+  // Fallback: infer module + entity_type from signal type when source fields are still UNKNOWN
+  const typeForLookup = raw.type || signalId;
+  if ((source.module === 'UNKNOWN' || source.entity_type === 'UNKNOWN') && SIGNAL_TYPE_SOURCE_MAP[typeForLookup]) {
+    const inferred = SIGNAL_TYPE_SOURCE_MAP[typeForLookup];
+    if (source.module === 'UNKNOWN') source.module = inferred.module;
+    if (source.entity_type === 'UNKNOWN') source.entity_type = inferred.entity_type;
+  }
+
+  // Last-resort fallback: try to pull entity_id from context fields
+  if (source.entity_id === 'UNKNOWN') {
+    const ctx2 = raw.context || {};
+    source.entity_id = String(ctx2.entity_id || ctx2.invoice_number || ctx2.filing_id || ctx2.trace_id || 'UNKNOWN');
   }
 
   // context: strip the nested source object we just extracted, keep everything else
@@ -193,6 +240,19 @@ export function validateSignal(normalized) {
   // source.system must be ARTHA
   if (normalized.source.system !== 'ARTHA') {
     errors.push(`source.system must be "ARTHA", got "${normalized.source.system}"`);
+  }
+
+  // Auto-resolve UNKNOWN source fields from the typed signal_id (e.g. SIG_INVOICE_OVERDUE)
+  const lookupKey = isKnownType ? normalized.signal_id : (normalized.context?.type || normalized.context?.signal_type || '');
+  if (lookupKey && SIGNAL_TYPE_SOURCE_MAP[lookupKey]) {
+    const inferred = SIGNAL_TYPE_SOURCE_MAP[lookupKey];
+    if (normalized.source.module === 'UNKNOWN') normalized.source.module = inferred.module;
+    if (normalized.source.entity_type === 'UNKNOWN') normalized.source.entity_type = inferred.entity_type;
+  }
+
+  // Last-resort: derive entity_id from trace_id if still UNKNOWN
+  if (normalized.source.entity_id === 'UNKNOWN' || !normalized.source.entity_id) {
+    normalized.source.entity_id = normalized.trace_id || 'UNKNOWN';
   }
 
   // source.module must be known

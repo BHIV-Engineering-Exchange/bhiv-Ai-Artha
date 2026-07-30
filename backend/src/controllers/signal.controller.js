@@ -7,7 +7,26 @@ import LedgerEntry from '../models/LedgerEntry.js';
 import { runPipeline } from '../services/setu.pipeline.js';
 import { toSampadaEnvelope, parseSampadaAcknowledge, sampadaIngestEndpoint } from '../services/sampadaAdapter.js';
 import logger from '../config/logger.js';
+import mongoose from 'mongoose';
 import axios from 'axios';
+
+async function findSignalByIdentifier(identifier) {
+  // Try signal_id (auto-generated SIG-<uuid>)
+  let signal = await ComplianceSignal.findOne({ signal_id: identifier }).lean();
+  if (signal) return signal;
+
+  // Try MongoDB _id
+  if (mongoose.Types.ObjectId.isValid(identifier)) {
+    signal = await ComplianceSignal.findById(identifier).lean();
+    if (signal) return signal;
+  }
+
+  // Try type (signal type like SIG_INVOICE_OVERDUE)
+  signal = await ComplianceSignal.findOne({ type: identifier }).sort({ created_at: -1 }).lean();
+  if (signal) return signal;
+
+  return null;
+}
 
 // @desc    Get cash flow signal from ledger only
 // @route   GET /api/v1/signals/cash-flow
@@ -205,7 +224,7 @@ export const reconstructTrace = async (req, res) => {
 // @access  Private (admin, accountant)
 export const pipelineCheck = async (req, res) => {
   try {
-    const signal = await ComplianceSignal.findOne({ signal_id: req.params.signalId }).lean();
+    const signal = await findSignalByIdentifier(req.params.signalId);
     if (!signal) {
       return res.status(404).json({ success: false, message: 'Signal not found' });
     }
@@ -226,7 +245,7 @@ export const pipelineCheck = async (req, res) => {
 // @access  Private (admin, accountant)
 export const dispatchSignal = async (req, res) => {
   try {
-    const signal = await ComplianceSignal.findOne({ signal_id: req.params.signalId }).lean();
+    const signal = await findSignalByIdentifier(req.params.signalId);
     if (!signal) {
       return res.status(404).json({ success: false, message: 'Signal not found' });
     }
@@ -423,11 +442,14 @@ export const cleanupDuplicateSignals = async (req, res) => {
     // Find duplicates: group by type, keep only the newest
     const duplicates = await ComplianceSignal.aggregate([
       {
+        $sort: { created_at: -1 },
+      },
+      {
         $group: {
           _id: '$type',
           ids: { $push: '$_id' },
           count: { $sum: 1 },
-          newest: { $max: '$created_at' },
+          newest: { $first: '$created_at' },
         },
       },
       {
@@ -437,9 +459,7 @@ export const cleanupDuplicateSignals = async (req, res) => {
 
     let totalRemoved = 0;
     for (const group of duplicates) {
-      // Sort ids by created_at desc, keep only the first (newest)
-      const sortedIds = group.ids;
-      const toRemove = sortedIds.slice(1); // remove all but the first
+      const toRemove = group.ids.slice(1);
       if (toRemove.length > 0) {
         await ComplianceSignal.deleteMany({ _id: { $in: toRemove } });
         totalRemoved += toRemove.length;

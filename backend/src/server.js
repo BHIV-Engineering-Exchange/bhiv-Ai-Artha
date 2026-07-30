@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import connectDB from './config/database.js';
 import { connectRedis } from './config/redis.js';
 import logger from './config/logger.js';
+import './models/Counter.js';
 import healthService from './services/health.service.js';
 import { validateEnvironment } from './config/validation.js';
 import { buildAllowedOrigins } from './config/cors.js';
@@ -14,7 +15,7 @@ import {
   protect,
   clearBlackholeCookie,
 } from './middleware/auth.js';
-import { login, signup } from './controllers/auth.controller.js';
+import { login, signup, logout } from './controllers/auth.controller.js';
 
 import {
   helmetConfig,
@@ -31,7 +32,7 @@ import {
   errorTracker,
 } from './middleware/monitoring.js';
 
-import { memoryMonitor } from './middleware/performance.js';
+import { memoryMonitor, stopMemoryMonitor } from './middleware/performance.js';
 import { authorityEnforcement } from './middleware/authorityBoundary.js';
 import { tracePropagation } from './middleware/tracePropagation.js';
 
@@ -147,7 +148,7 @@ const ALLOWED_ORIGINS = buildAllowedOrigins({
   authServerUrl: '',
   // Default on: local Vite (localhost:5173) can call prod API without extra Render env.
   // Set ALLOW_LOCALHOST_CORS=false to disable.
-  allowLocalhostCors: process.env.ALLOW_LOCALHOST_CORS !== 'false',
+  allowLocalhostCors: process.env.NODE_ENV !== 'production' && process.env.ALLOW_LOCALHOST_CORS !== 'false',
 });
 
 app.use((req, res, next) => {
@@ -159,7 +160,7 @@ app.use((req, res, next) => {
   }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Trace-Id, X-Request-Id');
 
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -186,7 +187,7 @@ app.use(sanitizeInput);
 app.use(tracePropagation);
 // ────────────────────────────────────────────────────────────────────────
 
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', protect, express.static('uploads'));
 
 // ─── MANDATORY AUTHORITY ENFORCEMENT ────────────────────────────
 // This middleware intercepts ALL requests and validates capability scope.
@@ -257,6 +258,7 @@ app.get('/api/v1/auth/test', (req, res) => {
 /** Local password login — returns JWT for `Authorization: Bearer`. */
 app.post('/api/v1/auth/login', authPasswordLimiter, login);
 app.post('/api/v1/auth/signup', authSignupLimiter, signup);
+app.post('/api/v1/auth/logout', protect, logout);
 
 app.get('/api/v1/auth/me', protect, (req, res) => {
   res.json({
@@ -308,24 +310,29 @@ app.use('/api/v1/governance', governanceRoutes);
 // Protected by HMAC signature verification for external webhook security
 app.post('/api/v1/setu/callback', async (req, res) => {
   try {
-    // Verify SETU webhook signature if HMAC_SECRET is configured
     const hmacSecret = process.env.SETU_HMAC_SECRET || process.env.HMAC_SECRET;
-    if (hmacSecret) {
-      const signature = req.headers['x-setu-signature'] || req.headers['x-hmac-signature'];
-      if (!signature) {
-        logger.warn('SETU callback missing signature');
-        return res.status(401).json({ success: false, message: 'Missing webhook signature' });
-      }
+    if (!hmacSecret) {
+      logger.error('SETU callback rejected: HMAC_SECRET not configured');
+      return res.status(503).json({ success: false, message: 'Webhook security not configured' });
+    }
 
-      const crypto = await import('crypto');
-      const expectedSig = crypto.createHmac('sha256', hmacSecret)
-        .update(JSON.stringify(req.body))
-        .digest('hex');
+    const signature = req.headers['x-setu-signature'] || req.headers['x-hmac-signature'];
+    if (!signature) {
+      logger.warn('SETU callback missing signature');
+      return res.status(401).json({ success: false, message: 'Missing webhook signature' });
+    }
 
-      if (signature !== expectedSig) {
-        logger.warn('SETU callback invalid signature');
-        return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
-      }
+    const crypto = await import('crypto');
+    const expectedSig = crypto.createHmac('sha256', hmacSecret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+
+    const sigBuffer = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expectedSig, 'hex');
+
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      logger.warn('SETU callback invalid signature');
+      return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
     }
 
     const result = await setuDispatch.processAcknowledgement(req.body);
@@ -377,9 +384,10 @@ app.use(errorTracker);
 
 app.use((err, req, res, _next) => {
   logger.error(err);
+  const isProduction = process.env.NODE_ENV === 'production';
   res.status(err.statusCode || 500).json({
     success: false,
-    message: err.message || 'Server error',
+    message: isProduction ? 'Internal server error' : (err.message || 'Server error'),
   });
 });
 
@@ -426,15 +434,32 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ─── Graceful Shutdown ─────────────────────────────────────────────────
-// Deregister from BHIV Core and flush telemetry on shutdown
 const gracefulShutdown = async (signal) => {
   logger.info(`[SHUTDOWN] ${signal} received, starting graceful shutdown...`);
+
+  stopMemoryMonitor();
 
   try {
     await runtimeRegistration.deregister();
     logger.info('[SHUTDOWN] Deregistered from BHIV Core');
   } catch (err) {
     logger.warn(`[SHUTDOWN] Deregistration failed: ${err.message}`);
+  }
+
+  try {
+    const mongoose = await import('mongoose');
+    await mongoose.default.connection.close(false);
+    logger.info('[SHUTDOWN] MongoDB connection closed');
+  } catch (err) {
+    logger.warn(`[SHUTDOWN] MongoDB close failed: ${err.message}`);
+  }
+
+  try {
+    const { disconnectRedis } = await import('./config/redis.js');
+    await disconnectRedis();
+    logger.info('[SHUTDOWN] Redis connection closed');
+  } catch (err) {
+    logger.warn(`[SHUTDOWN] Redis close failed: ${err.message}`);
   }
 
   process.exit(0);

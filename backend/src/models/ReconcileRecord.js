@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import { randomUUID } from 'crypto';
 
+const validateDecimal = {
+  validator: (v) => v === '' || v === null || v === undefined || (!isNaN(Number(v)) && isFinite(Number(v))),
+  message: '{VALUE} is not a valid decimal amount',
+};
+
 const reconcileRecordSchema = new mongoose.Schema({
   reconcileId: {
     type: String,
@@ -36,16 +41,16 @@ const reconcileRecordSchema = new mongoose.Schema({
     matched: { type: Number, default: 0 },
     unmatched: { type: Number, default: 0 },
     discrepancyCount: { type: Number, default: 0 },
-    totalDiscrepancyAmount: { type: String, default: '0' },
+    totalDiscrepancyAmount: { type: String, default: '0', validate: validateDecimal },
   },
   items: [{
     sourceType: String,
     sourceId: String,
-    sourceAmount: String,
+    sourceAmount: { type: String, validate: validateDecimal },
     targetType: String,
     targetId: String,
-    targetAmount: String,
-    difference: String,
+    targetAmount: { type: String, validate: validateDecimal },
+    difference: { type: String, validate: validateDecimal },
     status: {
       type: String,
       enum: ['matched', 'unmatched', 'partial', 'discrepancy'],

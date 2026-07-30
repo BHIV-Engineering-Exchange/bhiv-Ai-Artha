@@ -330,11 +330,7 @@ class FinancialReportsService {
         new Decimal(0)
       );
 
-      // Include fetched bank statement flow in report totals for period reporting.
       const bankFlow = await this.getBankStatementFlow(startDate, endDate);
-      const totalIncome = ledgerIncome.plus(bankFlow.totalCredits);
-      const totalExpenses = ledgerExpenses.plus(bankFlow.totalDebits);
-      const netIncome = totalIncome.minus(totalExpenses);
 
       return {
         period: {
@@ -343,13 +339,13 @@ class FinancialReportsService {
         },
         income: {
           accounts: incomeAccounts,
-          total: totalIncome.toString(),
+          total: ledgerIncome.toString(),
           ledgerTotal: ledgerIncome.toString(),
           fetchedCredits: bankFlow.totalCredits.toString(),
         },
         expenses: {
           accounts: expenseAccounts,
-          total: totalExpenses.toString(),
+          total: ledgerExpenses.toString(),
           ledgerTotal: ledgerExpenses.toString(),
           fetchedDebits: bankFlow.totalDebits.toString(),
         },
@@ -361,7 +357,7 @@ class FinancialReportsService {
           transactionCount: bankFlow.transactionCount,
           monthly: bankFlow.monthly,
         },
-        netIncome: netIncome.toString(),
+        netIncome: ledgerIncome.minus(ledgerExpenses).toString(),
       };
     } catch (error) {
       logger.error('Generate P&L error:', error);
@@ -913,7 +909,22 @@ class FinancialReportsService {
    */
   async generateRevenueExpensesChart(year) {
     try {
-      const targetYear = parseInt(year, 10) || new Date().getFullYear();
+      let targetYear = parseInt(year, 10) || new Date().getFullYear();
+
+      // Auto-detect data year: if the requested year has no journal entries,
+      // fall back to the year with the most recent data.
+      const latestEntry = await JournalEntry.findOne().sort({ date: -1 }).lean().catch(() => null);
+      if (latestEntry) {
+        const entryYear = new Date(latestEntry.date).getFullYear();
+        if (entryYear !== targetYear) {
+          const hasCurrentYearData = await JournalEntry.findOne({
+            date: { $gte: new Date(targetYear, 0, 1), $lte: new Date(targetYear, 11, 31) },
+          }).lean().catch(() => null);
+          if (!hasCurrentYearData) {
+            targetYear = entryYear;
+          }
+        }
+      }
       const monthlyData = [];
 
       for (let month = 0; month < 12; month++) {
@@ -1078,9 +1089,16 @@ class FinancialReportsService {
   async generateDashboardSummary() {
     try {
       const today = new Date();
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+
+      // Detect the most recent data year from journal entries so the dashboard
+      // shows meaningful numbers even when the seed data is from a prior year.
+      const latestEntry = await JournalEntry.findOne().sort({ date: -1 }).lean().catch(() => null);
+      const dataYear = latestEntry ? new Date(latestEntry.date).getFullYear() : today.getFullYear();
+      const useYear = today.getFullYear() === dataYear ? today.getFullYear() : dataYear;
+
+      const firstDayOfMonth = new Date(useYear, today.getMonth(), 1);
+      const lastDayOfMonth = new Date(useYear, today.getMonth() + 1, 0);
+      const firstDayOfYear = new Date(useYear, 0, 1);
 
       // Get current month and year P&L
       const [plMonth, plYear] = await Promise.all([
@@ -1289,6 +1307,7 @@ class FinancialReportsService {
           description: entry.description,
           postedBy: entry.postedBy?.name,
         })),
+        dataYear: useYear,
         summary: {
           totalRevenue: totalRevenue.toString(),
           totalExpenses: totalExpenses.toString(),

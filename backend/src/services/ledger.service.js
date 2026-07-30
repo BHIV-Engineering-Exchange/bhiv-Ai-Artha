@@ -45,7 +45,12 @@ class LedgerService {
     if (normalized === JOURNAL_STATUS.VALIDATED) return { $in: VALIDATED_STATUSES };
     if (normalized === JOURNAL_STATUS.VOIDED) return { $in: VOIDED_STATUSES };
 
-    return status;
+    return null;
+  }
+
+  sanitizeRegex(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -127,26 +132,12 @@ class LedgerService {
       : await ChartOfAccounts.find(query);
 
     if (accounts.length !== accountIds.length) {
-      // Auto-create any missing accounts instead of throwing
       const foundIds = new Set(accounts.map(a => String(a._id)));
-      for (const line of lines) {
-        if (!foundIds.has(String(line.account))) {
-          const newAccount = await ChartOfAccounts.create([{
-            code: `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            name: `Auto-created Account`,
-            type: 'Asset',
-            subtype: 'Current Asset',
-            normalBalance: 'debit',
-          }], ...(session ? [{ session }] : []));
-          line.account = newAccount[0]._id;
-        }
-      }
-      // Re-validate after auto-creation
-      const finalAccountIds = lines.map(line => line.account);
-      const finalAccounts = session
-        ? await ChartOfAccounts.find({ _id: { $in: finalAccountIds }, isActive: true }).session(session)
-        : await ChartOfAccounts.find({ _id: { $in: finalAccountIds }, isActive: true });
-      return finalAccounts;
+      const missingIds = accountIds.filter(id => !foundIds.has(String(id)));
+      throw new Error(
+        `Required accounts not found: ${missingIds.join(', ')}. ` +
+        `Please create these accounts before posting.`
+      );
     }
 
     return accounts;
@@ -1099,7 +1090,11 @@ class LedgerService {
 
       if (!VALIDATED_STATUSES.includes(entry.status)) {
         if (entry.status === JOURNAL_STATUS.DRAFT) {
-          // Auto-validate inline (no nested transaction)
+          this.validateLineIntegrity(entry.lines);
+          this.validateJournal(entry.lines);
+          const accounts = await this.validateAccounts(entry.lines, session);
+          const accountsById = new Map(accounts.map((account) => [String(account._id), account]));
+          this.validateComplianceRules(entry, accountsById);
           entry.status = JOURNAL_STATUS.VALIDATED;
           await entry.save({ session });
         } else {
@@ -1107,17 +1102,13 @@ class LedgerService {
         }
       }
 
-      // Verify hash before posting (tamper detection)
       if (entry.verifyHash && !entry.verifyHash()) {
         const recomputedHash = JournalEntry.computeHash(entry.toObject(), entry.prevHash || entry.prev_hash || '0');
-        if (recomputedHash === entry.hash) {
-          logger.warn(`Hash verification passed after recomputation for ${entry.entryNumber}`);
-        } else {
-          logger.warn(`Hash mismatch on ${entry.entryNumber} — self-healing: updating stored hash`);
-          entry.hash = recomputedHash;
-          entry.immutable_hash = recomputedHash;
-          await entry.save({ session });
+        if (recomputedHash !== entry.hash) {
+          logger.error(`Hash tamper detected on ${entry.entryNumber} — posting blocked`);
+          throw new Error('Entry hash verification failed — possible tampering detected');
         }
+        logger.warn(`Hash verification passed after recomputation for ${entry.entryNumber}`);
       }
 
       const ledgerEntries = await this.writeLedgerEntries(entry, session);
@@ -1327,10 +1318,11 @@ class LedgerService {
     }
 
     if (search) {
+      const safeSearch = this.sanitizeRegex(search);
       query.$or = [
-        { entryNumber: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { reference: { $regex: search, $options: 'i' } },
+        { entryNumber: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { reference: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
@@ -1565,9 +1557,10 @@ class LedgerService {
     }
 
     if (search) {
+      const safeSearch = this.sanitizeRegex(search);
       matchStage.$or = [
-        { 'accountDetails.name': { $regex: search, $options: 'i' } },
-        { 'accountDetails.code': { $regex: search, $options: 'i' } },
+        { 'accountDetails.name': { $regex: safeSearch, $options: 'i' } },
+        { 'accountDetails.code': { $regex: safeSearch, $options: 'i' } },
       ];
     }
 

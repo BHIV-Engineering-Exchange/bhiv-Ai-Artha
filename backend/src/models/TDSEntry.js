@@ -1,11 +1,15 @@
 import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 
+const validateDecimal = {
+  validator: (v) => v === '' || v === null || v === undefined || (!isNaN(Number(v)) && isFinite(Number(v))),
+  message: '{VALUE} is not a valid decimal amount',
+};
+
 const tdsEntrySchema = new mongoose.Schema({
   entryNumber: {
     type: String,
     unique: true,
-    // Format: TDS-YYYYMMDD-XXXX (auto-generated)
   },
   
   transactionDate: {
@@ -14,7 +18,6 @@ const tdsEntrySchema = new mongoose.Schema({
     default: Date.now,
   },
   
-  // Party details
   deductee: {
     name: {
       type: String,
@@ -35,56 +38,48 @@ const tdsEntrySchema = new mongoose.Schema({
   },
 
   salaryDetails: {
-    basic: String,
-    hra: String,
-    perquisites: String,
-    otherAllowances: String,
-    deductions: String,
-    employerDeductions: String,
-    taxableSalary: String,
+    basic: { type: String, validate: validateDecimal },
+    hra: { type: String, validate: validateDecimal },
+    perquisites: { type: String, validate: validateDecimal },
+    otherAllowances: { type: String, validate: validateDecimal },
+    deductions: { type: String, validate: validateDecimal },
+    employerDeductions: { type: String, validate: validateDecimal },
+    taxableSalary: { type: String, validate: validateDecimal },
   },
   
-  // Transaction details
   section: {
     type: String,
     required: true,
-    enum: [
-      '194A', // Interest other than on securities
-      '194C', // Contractor payments
-      '194H', // Commission/brokerage
-      '194I', // Rent
-      '194J', // Professional/technical services
-      '192',  // Salary
-      '194Q', // Purchase of goods
-      'other',
-    ],
+    enum: ['194A', '194C', '194H', '194I', '194J', '192', '194Q', 'other'],
   },
   
   nature: {
     type: String,
     required: true,
-    // e.g., 'Professional Fees', 'Rent', 'Interest', etc.
   },
   
   paymentAmount: {
     type: String,
     required: true,
+    validate: validateDecimal,
   },
   
   tdsRate: {
     type: Number,
     required: true,
-    // e.g., 10 for 10%
+    min: 0,
+    max: 100,
   },
   
   tdsAmount: {
     type: String,
     required: true,
+    validate: validateDecimal,
   },
   
   netPayable: {
     type: String,
-    // paymentAmount - tdsAmount (calculated automatically)
+    validate: validateDecimal,
   },
   
   // Payment details
@@ -139,14 +134,12 @@ const tdsEntrySchema = new mongoose.Schema({
 
 // Generate entry number and calculate net payable
 tdsEntrySchema.pre('save', async function(next) {
-  // Generate entry number if new
   if (this.isNew && !this.entryNumber) {
+    const Counter = mongoose.model('Counter');
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await mongoose.model('TDSEntry').countDocuments({
-      entryNumber: new RegExp(`^TDS-${dateStr}`)
-    });
-    this.entryNumber = `TDS-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+    const seq = await Counter.getNextSequence('tdsEntry', { date: dateStr });
+    this.entryNumber = `TDS-${dateStr}-${String(seq).padStart(4, '0')}`;
   }
   
   // Calculate net payable

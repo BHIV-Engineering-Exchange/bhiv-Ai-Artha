@@ -27,6 +27,8 @@ const invoiceSchema = new mongoose.Schema({
   customerEmail: {
     type: String,
     required: true,
+    lowercase: true,
+    trim: true,
   },
   customerAddress: {
     type: mongoose.Schema.Types.Mixed,
@@ -79,11 +81,11 @@ const invoiceSchema = new mongoose.Schema({
   // Alias for backward compatibility - both items and lines are supported
   lines: {
     type: [{
-      description: String,
-      quantity: Number,
-      unitPrice: { type: String, validate: validateDecimal },
-      amount: { type: String, validate: validateDecimal },
-      taxRate: Number,
+      description: { type: String, required: true },
+      quantity: { type: Number, required: true, min: 0.01 },
+      unitPrice: { type: String, required: true, validate: validateDecimal },
+      amount: { type: String, required: true, validate: validateDecimal },
+      taxRate: { type: Number, min: 0, max: 100 },
       hsnCode: String,
     }],
   },
@@ -131,9 +133,8 @@ const invoiceSchema = new mongoose.Schema({
   // Alias for backward compatibility
   totalTax: {
     type: String,
-    default: function() {
-      return this.taxAmount;
-    }
+    default: '0',
+    validate: validateDecimal,
   },
   totalAmount: {
     type: String,
@@ -221,14 +222,12 @@ invoiceSchema.virtual('outstanding_amount').get(function() {
 // Sync items and lines fields for backward compatibility
 invoiceSchema.pre('save', async function(next) {
   try {
-    // Auto-generate invoice number
     if (this.isNew && !this.invoiceNumber) {
+      const Counter = mongoose.model('Counter');
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-      const count = await mongoose.model('Invoice').countDocuments({
-        invoiceNumber: new RegExp(`^INV-${dateStr}`)
-      });
-      this.invoiceNumber = `INV-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+      const seq = await Counter.getNextSequence('invoice', { date: dateStr });
+      this.invoiceNumber = `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
     }
     
     // Sync items and lines
@@ -274,8 +273,6 @@ invoiceSchema.pre('save', async function(next) {
   }
 });
 
-// Ensure virtual fields are serialized
-invoiceSchema.set('toJSON', { virtuals: true });
-invoiceSchema.set('toObject', { virtuals: true });
+
 
 export default mongoose.model('Invoice', invoiceSchema);

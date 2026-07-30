@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 
+const validateDecimal = {
+  validator: (v) => v === '' || v === null || v === undefined || (!isNaN(Number(v)) && isFinite(Number(v))),
+  message: '{VALUE} is not a valid decimal amount',
+};
+
 const tdsChallanSchema = new mongoose.Schema({
   challanNumber: {
     type: String,
@@ -15,6 +20,7 @@ const tdsChallanSchema = new mongoose.Schema({
   amount: {
     type: String,
     required: true,
+    validate: validateDecimal,
   },
   section: {
     type: String,

@@ -31,13 +31,13 @@ export const smartUpload = async (req, res) => {
       endDate: req.body.endDate,
       openingBalance: req.body.openingBalance,
       closingBalance: req.body.closingBalance,
-      password: req.body.password,
     };
 
     const result = await smartUploadService.processUpload(
       req.file,
       req.user._id,
-      metadata
+      metadata,
+      req.body.password
     );
 
     res.status(201).json({

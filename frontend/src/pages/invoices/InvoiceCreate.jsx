@@ -155,22 +155,15 @@ const InvoiceCreate = () => {
         totalAmount: String(totals.total.toFixed(2)),
       };
 
-      console.log('Sending invoice payload:', payload);
-
       if (isEditing) {
         const response = await api.put(`/invoices/${id}`, payload);
-        console.log('Update response:', response.data);
         toast.success('Invoice updated successfully');
       } else {
         const response = await api.post('/invoices', payload);
-        console.log('Create response:', response.data);
         toast.success('Invoice created successfully');
       }
       navigate('/invoices');
     } catch (error) {
-      console.error('Invoice save error:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       const errorMsg = error.response?.data?.message || error.message || 'Failed to save invoice';
       toast.error(errorMsg);
     } finally {

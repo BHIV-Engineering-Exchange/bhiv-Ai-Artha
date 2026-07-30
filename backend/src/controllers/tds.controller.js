@@ -26,14 +26,19 @@ export const createTDSEntry = async (req, res) => {
 // @access  Private
 export const getTDSEntries = async (req, res) => {
   try {
+    const sanitizeString = (val) => {
+      if (typeof val !== 'string') return val;
+      return val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
     const filters = {
-      status: req.query.status,
-      section: req.query.section,
-      quarter: req.query.quarter,
-      financialYear: req.query.financialYear,
+      status: sanitizeString(req.query.status),
+      section: sanitizeString(req.query.section),
+      quarter: sanitizeString(req.query.quarter),
+      financialYear: sanitizeString(req.query.financialYear),
       dateFrom: req.query.dateFrom,
       dateTo: req.query.dateTo,
-      pan: req.query.pan,
+      pan: sanitizeString(req.query.pan),
     };
     
     const pagination = {

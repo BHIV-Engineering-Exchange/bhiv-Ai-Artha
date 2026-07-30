@@ -1,9 +1,0 @@
-{
-  "description": "Authentication flow - login and token generation",
-  "login_status": 200,
-  "token_type": "bearer",
-  "has_access_token": true,
-  "has_refresh_token": true,
-  "expires_in": 1440,
-  "timestamp": "2026-06-29T13:15:53.899946+00:00"
-}

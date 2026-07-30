@@ -35,7 +35,7 @@ router.route('/summary').get(getTDSSummary);
 
 router.route('/dashboard').get(getTDSDashboard);
 
-router.route('/form26q').get(authorize('accountant', 'admin'), generateForm26Q);
+router.route('/form26q').get(authorize('accountant', 'admin', 'viewer'), generateForm26Q);
 
 router
   .route('/entries')

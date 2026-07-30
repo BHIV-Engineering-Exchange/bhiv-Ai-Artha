@@ -14,8 +14,8 @@ router.use(protect);
 // Routes
 router.route('/experience').post(logExperience);
 
-router.route('/experiences').get(authorize('admin'), getExperiences);
+router.route('/experiences').get(authorize('admin', 'accountant', 'viewer'), getExperiences);
 
-router.route('/stats').get(authorize('admin'), getExperienceStats);
+router.route('/stats').get(authorize('admin', 'accountant', 'viewer'), getExperienceStats);
 
 export default router;

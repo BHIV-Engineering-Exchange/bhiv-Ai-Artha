@@ -73,31 +73,8 @@ const InvoiceViewInner = () => {
       const response = await api.get(`/invoices/${id}`);
       setInvoice(response.data.data);
     } catch (error) {
-      // Use sample data for demo
-      setInvoice({
-        _id: id,
-        invoiceNumber: 'INV-2026-0001',
-        status: 'sent',
-        customerName: 'Acme Corporation',
-        customerEmail: 'billing@acme.com',
-        customerAddress: '123 Business Park, Mumbai, Maharashtra 400001',
-        customerGSTIN: '27AABCU9603R1ZM',
-        invoiceDate: '2026-02-01',
-        dueDate: '2026-03-01',
-        items: [
-          { description: 'Web Development Services', quantity: 1, unitPrice: 50000, gstRate: 18, amount: 59000 },
-          { description: 'UI/UX Design', quantity: 1, unitPrice: 25000, gstRate: 18, amount: 29500 },
-          { description: 'Cloud Hosting (Annual)', quantity: 1, unitPrice: 12000, gstRate: 18, amount: 14160 },
-        ],
-        subtotal: 87000,
-        taxAmount: 15660,
-        totalAmount: 102660,
-        amountPaid: 0,
-        amountDue: 102660,
-        notes: 'Thank you for your business!',
-        terms: 'Payment is due within 30 days of invoice date.',
-        createdAt: '2026-02-01',
-      });
+      console.error('Failed to fetch invoice:', error);
+      toast.error('Failed to load invoice');
     } finally {
       setLoading(false);
     }

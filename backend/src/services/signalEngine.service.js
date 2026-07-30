@@ -101,7 +101,13 @@ async function persistSignal(payload) {
       source: payload.source.system,
       type: payload.signal_id,
       severity: payload.severity,
-      context: { ...payload.context, source: payload.source },
+      context: {
+        ...payload.context,
+        source: payload.source,
+        module: payload.source.module,
+        entity_type: payload.source.entity_type,
+        entity_id: payload.source.entity_id,
+      },
       recommendation: `[${payload.recommendation.code}] ${payload.recommendation.message}`,
     });
     return signal;

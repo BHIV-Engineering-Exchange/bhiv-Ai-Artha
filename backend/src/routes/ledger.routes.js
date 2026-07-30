@@ -140,13 +140,13 @@ router.route('/balances').get(getBalances);
 
 router.route('/summary').get(cacheMiddleware(300), getSummary);
 
-router.route('/verify').get(authorize('admin'), verifyChain);
+router.route('/verify').get(authorize('admin', 'accountant', 'viewer'), verifyChain);
 
 // Enhanced hash-chain endpoints
-router.route('/entries/:id/verify-chain').get(authorize('admin'), verifyChainFromEntry);
-router.route('/chain-stats').get(authorize('admin'), cacheMiddleware(300), getChainStats);
-router.route('/verify-chain').get(authorize('admin'), verifyLedgerChain);
-router.route('/chain-segment').get(authorize('admin'), getChainSegment);
+router.route('/entries/:id/verify-chain').get(authorize('admin', 'accountant', 'viewer'), verifyChainFromEntry);
+router.route('/chain-stats').get(authorize('admin', 'accountant', 'viewer'), cacheMiddleware(300), getChainStats);
+router.route('/verify-chain').get(authorize('admin', 'accountant', 'viewer'), verifyLedgerChain);
+router.route('/chain-segment').get(authorize('admin', 'accountant', 'viewer'), getChainSegment);
 router.route('/entries/:id/verify').get(verifySingleEntry);
 
 // Legacy routes for backward compatibility
@@ -155,6 +155,6 @@ router.post('/journal-entries', authorize('accountant', 'admin'), createEntryVal
 router.get('/journal-entries/:id', getEntry);
 router.post('/journal-entries/:id/post', authorize('accountant', 'admin'), auditLogger('journal_entry.posted', 'JournalEntry'), postEntry);
 router.post('/journal-entries/:id/void', authorize('accountant', 'admin'), voidEntryValidation, validate, auditLogger('journal_entry.voided', 'JournalEntry'), voidEntry);
-router.get('/verify-chain', authorize('admin'), verifyChain);
+router.get('/verify-chain', authorize('admin', 'accountant', 'viewer'), verifyChain);
 
 export default router;

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 const setuDispatchSchema = new mongoose.Schema({
   dispatchId: {
@@ -120,16 +120,16 @@ setuDispatchSchema.statics.generateIdempotencyKey = function(signalId, attemptNu
 };
 
 setuDispatchSchema.statics.computeBodyHash = function(body) {
-  const crypto = require('crypto');
-  return crypto.createHash('sha256').update(JSON.stringify(body || {})).digest('hex');
+  return createHash('sha256').update(JSON.stringify(body || {})).digest('hex');
 };
 
 setuDispatchSchema.methods.canRetry = function() {
   return this.attemptNumber < this.maxAttempts && this.retry.isRetryableError;
 };
 
-setuDispatchSchema.methods.markFailed = function(reason, isRetryable = true) {
-  this.deliveryStatus = 'TIMEOUT';
+setuDispatchSchema.methods.markFailed = function(reason, isRetryable = true, status = 'NETWORK_ERROR') {
+  this.deliveryStatus = status;
+  if (!this.response) this.response = {};
   this.response.timestamp = new Date();
   this.retry.failureReason = reason;
   this.retry.isRetryableError = isRetryable;

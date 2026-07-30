@@ -124,57 +124,25 @@ const CompanySettings = () => {
       const response = await api.get('/settings/company');
       const data = response.data.data;
       
-      // Populate form
-      Object.keys(data).forEach((key) => {
-        setValue(key, data[key]);
-      });
+      const setNestedValue = (obj, prefix = '') => {
+        Object.keys(obj).forEach((key) => {
+          const path = prefix ? `${prefix}.${key}` : key;
+          const value = obj[key];
+          if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+            setNestedValue(value, path);
+          } else {
+            setValue(path, value);
+          }
+        });
+      };
+      
+      setNestedValue(data);
       
       if (data.logo) {
         setLogoPreview(data.logo);
       }
     } catch (error) {
-      console.error('Failed to fetch settings:', error);
-      // Set sample data
-      const sampleData = {
-        name: 'Artha Technologies Pvt Ltd',
-        legalName: 'Artha Technologies Private Limited',
-        email: 'accounts@artha.com',
-        phone: '9876543210',
-        website: 'https://artha.com',
-        gstin: '27AABCT1234A1Z5',
-        pan: 'AABCT1234A',
-        tan: 'MUMB12345A',
-        cin: 'U72200MH2020PTC123456',
-        address: {
-          line1: '123 Business Park',
-          line2: 'Andheri East',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          pincode: '400069',
-          country: 'India',
-        },
-        bankDetails: {
-          accountName: 'Artha Technologies Pvt Ltd',
-          accountNumber: '50200012345678',
-          bankName: 'HDFC Bank',
-          ifscCode: 'HDFC0001234',
-          branch: 'Andheri East',
-        },
-        invoiceSettings: {
-          prefix: 'INV',
-          nextNumber: 156,
-          termsAndConditions: 'Payment due within 30 days. Late payments will attract interest at 18% per annum.',
-          notes: 'Thank you for your business!',
-        },
-        financialYear: {
-          startMonth: 4,
-          startDay: 1,
-        },
-      };
-      
-      Object.keys(sampleData).forEach((key) => {
-        setValue(key, sampleData[key]);
-      });
+      toast.error('Failed to load company settings');
     } finally {
       setLoading(false);
     }

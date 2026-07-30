@@ -264,9 +264,18 @@ class ExportService {
    * Export to CSV
    */
   exportToCSV(data, headers) {
-    let csv = headers.join(',') + '\n';
+    const sanitizeCSV = (val) => {
+      const str = String(val ?? '');
+      const dangerousPrefixes = ['=', '+', '-', '@', '\t', '\r'];
+      if (dangerousPrefixes.some(p => str.startsWith(p))) {
+        return `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    let csv = headers.map(h => sanitizeCSV(h)).join(',') + '\n';
     data.forEach(row => {
-      csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+      csv += row.map(cell => sanitizeCSV(cell)).join(',') + '\n';
     });
     return csv;
   }

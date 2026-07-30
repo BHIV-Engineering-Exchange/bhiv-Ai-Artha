@@ -43,14 +43,10 @@ export function buildAllowedOrigins({
   }
 
   if (allowLocalhostCors !== false && allowLocalhostCors !== 'false') {
-    [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:4173',
-      'http://127.0.0.1:4173',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ].forEach((h) => set.add(h));
+    for (let port of [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 3000, 8080]) {
+      set.add(`http://localhost:${port}`);
+      set.add(`http://127.0.0.1:${port}`);
+    }
   }
 
   const list = [...set];

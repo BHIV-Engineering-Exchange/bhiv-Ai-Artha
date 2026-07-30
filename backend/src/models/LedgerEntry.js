@@ -28,6 +28,18 @@ const ledgerEntrySchema = new mongoose.Schema(
     amount: {
       type: String,
       required: true,
+      validate: {
+        validator: function(v) {
+          if (v === null || v === undefined) return false;
+          try {
+            const num = Number(v);
+            return !isNaN(num) && isFinite(num);
+          } catch {
+            return false;
+          }
+        },
+        message: 'Invalid decimal amount',
+      },
     },
     hash: {
       type: String,

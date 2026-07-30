@@ -145,8 +145,9 @@ expenseSchema.index({ account: 1 });
 // Auto-generate expense number
 expenseSchema.pre('save', async function(next) {
   if (this.isNew && !this.expenseNumber) {
-    const count = await mongoose.model('Expense').countDocuments();
-    this.expenseNumber = `EXP-${String(count + 1).padStart(6, '0')}`;
+    const Counter = mongoose.model('Counter');
+    const seq = await Counter.getNextSequence('expense');
+    this.expenseNumber = `EXP-${String(seq).padStart(6, '0')}`;
   }
   next();
 });

@@ -10,7 +10,7 @@
  * ALL data is live from /api/v1/reports/* endpoints — no seeding.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   AlertCircle,
   ArrowDownRight,
@@ -89,20 +89,30 @@ function mapDbSignals(rawSignals) {
 }
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
-const KpiCard = ({ icon: Icon, label, value, subValue, color = 'primary' }) => (
-  <Card className="p-4 hover:shadow-md transition-shadow">
-    <div className="flex items-start justify-between">
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-xl font-bold text-foreground">{value}</p>
-        {subValue && <p className="text-xs text-muted-foreground">{subValue}</p>}
+const COLOR_MAP = {
+  primary: { bg: 'bg-primary/10', text: 'text-primary' },
+  success: { bg: 'bg-success/10', text: 'text-success' },
+  destructive: { bg: 'bg-destructive/10', text: 'text-destructive' },
+  warning: { bg: 'bg-warning/10', text: 'text-warning' },
+};
+
+const KpiCard = ({ icon: Icon, label, value, subValue, color = 'primary' }) => {
+  const colors = COLOR_MAP[color] || COLOR_MAP.primary;
+  return (
+    <Card className="p-4 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+          <p className="text-xl font-bold text-foreground">{value}</p>
+          {subValue && <p className="text-xs text-muted-foreground">{subValue}</p>}
+        </div>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.bg}`}>
+          <Icon className={`w-5 h-5 ${colors.text}`} />
+        </div>
       </div>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-${color}/10`}>
-        <Icon className={`w-5 h-5 text-${color}`} />
-      </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};
 
 // ─── BackendUnavailableState ─────────────────────────────────────────────────
 const BackendUnavailableState = ({ onRetry }) => (
@@ -127,6 +137,12 @@ const BackendUnavailableState = ({ onRetry }) => (
 );
 
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
+const INVOICE_STATUS_COLORS = {
+  success: { card: 'bg-success/5 border-success/20', text: 'text-success' },
+  warning: { card: 'bg-warning/5 border-warning/20', text: 'text-warning' },
+  destructive: { card: 'bg-destructive/5 border-destructive/20', text: 'text-destructive' },
+};
+
 const FinancialIntelligenceDashboard = () => {
   const { mode, lastChecked, recheck } = useRuntimeMode();
   const { signals: rawSignals, source, loading: signalsLoading, error: signalsError, fetchSignals } = useSignals();
@@ -143,12 +159,14 @@ const FinancialIntelligenceDashboard = () => {
   // Fetch ALL live data from backend
   useEffect(() => {
     if (mode === RUNTIME_MODES.BACKEND_CONNECTED || mode === RUNTIME_MODES.BACKEND_DEGRADED) {
-      fetchAllData();
+      const controller = new AbortController();
+      fetchAllData(controller.signal);
       fetchSignals();
+      return () => controller.abort();
     }
   }, [mode, fetchSignals]);
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async (signal) => {
     setLoading(true);
     setError(null);
     try {
@@ -159,24 +177,27 @@ const FinancialIntelligenceDashboard = () => {
 
       const [dashResult, chartResult, breakdownResult, timelineResult] = await Promise.allSettled([
         dashboardService.getStats(),
-        api.get(`/reports/revenue-expenses-chart?year=${today.getFullYear()}`),
-        api.get(`/reports/expense-breakdown?startDate=${firstDayOfYear.toISOString().split('T')[0]}&endDate=${lastDayOfYear.toISOString().split('T')[0]}`),
+        api.get(`/reports/revenue-expenses-chart?year=${today.getFullYear()}`, { signal }),
+        api.get(`/reports/expense-breakdown?startDate=${firstDayOfYear.toISOString().split('T')[0]}&endDate=${lastDayOfYear.toISOString().split('T')[0]}`, { signal }),
         dashboardService.getBankTransactionTimeline({
           startDate: firstDayOfMonth.toISOString().split('T')[0],
           endDate: today.toISOString().split('T')[0],
         }),
       ]);
 
+      if (signal?.aborted) return;
+
       setDashboardData(dashResult.status === 'fulfilled' ? dashResult.value.data.data : null);
       setRevenueExpensesChart(chartResult.status === 'fulfilled' ? chartResult.value.data.data : []);
       setExpenseBreakdown(breakdownResult.status === 'fulfilled' ? breakdownResult.value.data.data : []);
       setBankTimeline(timelineResult.status === 'fulfilled' ? timelineResult.value.data.data : []);
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Map signals (deduplicated)
   const signals = useMemo(() => {
@@ -196,17 +217,11 @@ const FinancialIntelligenceDashboard = () => {
 
   useEffect(() => {
     if (signals.length && !selectedSignal) setSelectedSignal(signals[0]);
-  }, [signals]);
+  }, [signals, selectedSignal]);
 
   const d = dashboardData;
 
   // ── Render states ──
-  if (mode === RUNTIME_MODES.CHECKING) {
-    return <div className="space-y-4"><RuntimeModeBanner mode={mode} /><Loading.Page /></div>;
-  }
-  if (mode === RUNTIME_MODES.BACKEND_UNAVAILABLE) {
-    return <div className="space-y-4"><RuntimeModeBanner mode={mode} lastChecked={lastChecked} onRecheck={recheck} /><BackendUnavailableState onRetry={recheck} /></div>;
-  }
   if (mode === RUNTIME_MODES.MOCK_MODE) {
     return (
       <div className="space-y-4">
@@ -222,6 +237,18 @@ const FinancialIntelligenceDashboard = () => {
   return (
     <div className="space-y-5 animate-fadeIn">
       <RuntimeModeBanner mode={mode} lastChecked={lastChecked} onRecheck={recheck} />
+
+      {mode === RUNTIME_MODES.BACKEND_UNAVAILABLE && (
+        <Card className="p-4 border-destructive/30 bg-destructive/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-destructive" />
+              <p className="text-xs font-semibold text-destructive">Backend unavailable — showing cached or empty data</p>
+            </div>
+            <button onClick={recheck} className="text-xs text-primary hover:underline font-medium">Retry</button>
+          </div>
+        </Card>
+      )}
 
       {(signalsError || error) && (
         <Card className="p-3 border-destructive/30 bg-destructive/5">
@@ -396,13 +423,16 @@ const FinancialIntelligenceDashboard = () => {
                   { label: 'Paid', count: d.invoices.paid?.count || 0, amount: d.invoices.paid?.totalAmount || '0', color: 'success' },
                   { label: 'Pending', count: (d.invoices.sent?.count || 0) + (d.invoices.partial?.count || 0), amount: Number(d.invoices.sent?.totalDue || 0) + Number(d.invoices.partial?.totalDue || 0), color: 'warning' },
                   { label: 'Overdue', count: d.invoices.overdue?.count || 0, amount: d.invoices.overdue?.totalDue || '0', color: 'destructive' },
-                ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-lg bg-${item.color}/5 border border-${item.color}/20`}>
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-lg font-bold text-${item.color}`}>{item.count}</p>
-                    <p className="text-xs text-muted-foreground">{fmt(item.amount)}</p>
-                  </div>
-                ))}
+                ].map(item => {
+                  const itemColors = INVOICE_STATUS_COLORS[item.color] || INVOICE_STATUS_COLORS.warning;
+                  return (
+                    <div key={item.label} className={`p-3 rounded-lg ${itemColors.card}`}>
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className={`text-lg font-bold ${itemColors.text}`}>{item.count}</p>
+                      <p className="text-xs text-muted-foreground">{fmt(item.amount)}</p>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}

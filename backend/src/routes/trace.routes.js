@@ -6,85 +6,86 @@ import logger from '../config/logger.js';
 
 const router = express.Router();
 
-/**
- * @route   GET /api/v1/trace/:traceId
- * @desc    Get full trace chain with all linked entities
- * @access  Private
- */
+router.get('/search', protect, async (req, res) => {
+  try {
+    const filters = req.query;
+    const results = await traceabilityService.searchTraces(filters);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    logger.error('Search traces error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/statistics', protect, authorize('admin', 'accountant', 'viewer'), async (req, res) => {
+  try {
+    const stats = await traceabilityService.getStatistics();
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    logger.error('Get trace statistics error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/proofs/report', protect, authorize('admin', 'accountant', 'viewer'), async (req, res) => {
+  try {
+    const filters = req.query;
+    const report = await runtimeProofService.generateReport(filters);
+    res.json({ success: true, data: report });
+  } catch (error) {
+    logger.error('Generate proof report error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/proofs/:proofId/verify', protect, authorize('admin', 'accountant', 'viewer'), async (req, res) => {
+  try {
+    const { proofId } = req.params;
+    const result = await runtimeProofService.verifyProof(proofId, req.user._id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error('Verify proof error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.get('/:traceId', protect, async (req, res) => {
   try {
     const { traceId } = req.params;
     const chain = await traceabilityService.getFullChain(traceId);
-    
-    res.json({
-      success: true,
-      data: chain,
-    });
+    res.json({ success: true, data: chain });
   } catch (error) {
     logger.error('Get trace chain error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   GET /api/v1/trace/:traceId/lineage
- * @desc    Reconstruct full lineage with causality graph
- * @access  Private
- */
 router.get('/:traceId/lineage', protect, async (req, res) => {
   try {
     const { traceId } = req.params;
     const lineage = await traceabilityService.reconstructLineage(traceId);
-    
-    res.json({
-      success: true,
-      data: lineage,
-    });
+    res.json({ success: true, data: lineage });
   } catch (error) {
     logger.error('Reconstruct lineage error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   POST /api/v1/trace/:traceId/replay
- * @desc    Replay trace (full state reconstruction)
- * @access  Private (admin, accountant)
- */
 router.post('/:traceId/replay', protect, authorize('admin', 'accountant'), async (req, res) => {
   try {
     const { traceId } = req.params;
     const replay = await traceabilityService.replayTrace(traceId, req.user._id);
-    
-    res.json({
-      success: true,
-      data: replay,
-    });
+    res.json({ success: true, data: replay });
   } catch (error) {
     logger.error('Replay trace error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   GET /api/v1/trace/:traceId/continuity
- * @desc    Verify trace continuity
- * @access  Private
- */
 router.get('/:traceId/continuity', protect, async (req, res) => {
   try {
     const { traceId } = req.params;
     const trace = await traceabilityService.getFullChain(traceId);
-    
     res.json({
       success: true,
       data: {
@@ -96,183 +97,46 @@ router.get('/:traceId/continuity', protect, async (req, res) => {
     });
   } catch (error) {
     logger.error('Verify continuity error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   GET /api/v1/trace/:traceId/proofs
- * @desc    Get all runtime proofs for a trace
- * @access  Private
- */
 router.get('/:traceId/proofs', protect, async (req, res) => {
   try {
     const { traceId } = req.params;
     const proofs = await runtimeProofService.getProofsForTrace(traceId);
-    
-    res.json({
-      success: true,
-      data: proofs,
-    });
+    res.json({ success: true, data: proofs });
   } catch (error) {
     logger.error('Get trace proofs error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   POST /api/v1/trace/:traceId/proof/terminal
- * @desc    Capture terminal log as proof
- * @access  Private (admin, accountant)
- */
 router.post('/:traceId/proof/terminal', protect, authorize('admin', 'accountant'), async (req, res) => {
   try {
     const { traceId } = req.params;
     const { output, metadata } = req.body;
-    
     const proof = await runtimeProofService.captureTerminalLog({
-      trace_id: traceId,
-      output,
-      metadata,
+      trace_id: traceId, output, metadata,
     });
-    
-    res.json({
-      success: true,
-      data: proof.getSummary(),
-    });
+    res.json({ success: true, data: proof.getSummary() });
   } catch (error) {
     logger.error('Capture terminal log error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/**
- * @route   POST /api/v1/trace/:traceId/proof/curl
- * @desc    Capture curl output as proof
- * @access  Private (admin, accountant)
- */
 router.post('/:traceId/proof/curl', protect, authorize('admin', 'accountant'), async (req, res) => {
   try {
     const { traceId } = req.params;
     const { curl_command, output, exit_code } = req.body;
-    
     const proof = await runtimeProofService.captureCurlOutput({
-      trace_id: traceId,
-      curl_command,
-      output,
-      exit_code,
+      trace_id: traceId, curl_command, output, exit_code,
     });
-    
-    res.json({
-      success: true,
-      data: proof.getSummary(),
-    });
+    res.json({ success: true, data: proof.getSummary() });
   } catch (error) {
     logger.error('Capture curl output error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * @route   GET /api/v1/trace/search
- * @desc    Search traces with filters
- * @access  Private
- */
-router.get('/search', protect, async (req, res) => {
-  try {
-    const filters = req.query;
-    const results = await traceabilityService.searchTraces(filters);
-    
-    res.json({
-      success: true,
-      data: results,
-    });
-  } catch (error) {
-    logger.error('Search traces error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * @route   GET /api/v1/trace/statistics
- * @desc    Get trace statistics
- * @access  Private (admin, accountant)
- */
-router.get('/statistics', protect, authorize('admin', 'accountant'), async (req, res) => {
-  try {
-    const stats = await traceabilityService.getStatistics();
-    
-    res.json({
-      success: true,
-      data: stats,
-    });
-  } catch (error) {
-    logger.error('Get trace statistics error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * @route   GET /api/v1/trace/proofs/report
- * @desc    Generate runtime proof report
- * @access  Private (admin, accountant)
- */
-router.get('/proofs/report', protect, authorize('admin', 'accountant'), async (req, res) => {
-  try {
-    const filters = req.query;
-    const report = await runtimeProofService.generateReport(filters);
-    
-    res.json({
-      success: true,
-      data: report,
-    });
-  } catch (error) {
-    logger.error('Generate proof report error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * @route   POST /api/v1/trace/proofs/:proofId/verify
- * @desc    Verify a runtime proof
- * @access  Private (admin, accountant)
- */
-router.post('/proofs/:proofId/verify', protect, authorize('admin', 'accountant'), async (req, res) => {
-  try {
-    const { proofId } = req.params;
-    const result = await runtimeProofService.verifyProof(proofId, req.user._id);
-    
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    logger.error('Verify proof error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

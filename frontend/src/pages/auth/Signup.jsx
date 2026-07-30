@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { UserPlus, Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import api, { AUTH_TOKEN_KEY } from '../../services/api';
+import api from '../../services/api';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 
@@ -37,17 +37,11 @@ const Signup = () => {
         phone: phone.trim() || undefined,
         password,
       });
-      const token = data?.data?.token;
-      if (!token) {
-        toast.error('Account created, but no token received. Please login.');
-        navigate('/login', { replace: true });
-        return;
-      }
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
       await checkAuth();
       navigate('/dashboard', { replace: true });
-    } catch {
-      /* interceptor handles message */
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Signup failed';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }

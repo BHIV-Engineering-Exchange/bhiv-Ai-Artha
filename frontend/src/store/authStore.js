@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api, { AUTH_TOKEN_KEY } from '../services/api';
+import api from '../services/api';
 
 export const useAuthStore = create((set) => ({
   user: null,
@@ -10,14 +10,6 @@ export const useAuthStore = create((set) => ({
 
   checkAuth: async () => {
     try {
-      if (typeof window !== 'undefined' && !localStorage.getItem(AUTH_TOKEN_KEY)) {
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-        return;
-      }
       const response = await api.get('/auth/me');
       set({
         user: response.data?.data || null,
@@ -33,9 +25,9 @@ export const useAuthStore = create((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
     try {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      await api.post('/auth/logout');
     } catch {
       /* ignore */
     }

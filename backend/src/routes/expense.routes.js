@@ -137,6 +137,6 @@ router
 
 router
   .route('/:id/receipts/:receiptId')
-  .delete(deleteReceipt);
+  .delete(authorize('admin', 'accountant'), deleteReceipt);
 
 export default router;

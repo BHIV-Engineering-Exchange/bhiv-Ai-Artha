@@ -3,15 +3,12 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Install backend dependencies
 COPY backend/package.json backend/package-lock.json* ./backend/
 WORKDIR /app/backend
 RUN npm ci --ignore-scripts || npm install
 
-# Copy backend source
 COPY backend/ ./
 
-# Run governance pipeline tests (best-effort; do not fail build on missing DB)
 RUN (npx jest --passWithNoTests --forceExit --silent 2>/dev/null || echo "Tests skipped: no database available in build stage") \
     && mkdir -p evidence \
     && node -e " \
@@ -31,10 +28,17 @@ FROM node:20-alpine AS production
 
 RUN apk add --no-cache curl
 
+RUN addgroup -g 1001 -S artha && \
+    adduser -S artha -u 1001 -G artha
+
 WORKDIR /app
 
-# Copy backend source and dependencies from build stage
-COPY --from=build /app/backend ./backend
+COPY --from=build --chown=artha:artha /app/backend ./backend
+
+RUN mkdir -p /app/backend/uploads /app/backend/logs /app/backend/evidence && \
+    chown -R artha:artha /app/backend
+
+USER artha
 
 EXPOSE 5000
 

@@ -67,9 +67,7 @@ const TDSManagement = () => {
   const fetchTDSData = async () => {
     setLoading(true);
     try {
-      console.log('Fetching TDS data:', { quarter, year });
       const response = await api.get(`/tds/dashboard?quarter=${quarter}&financialYear=${year}`);
-      console.log('TDS API Response:', response.data);
       const apiData = response.data.data;
       
       setData({
@@ -79,8 +77,6 @@ const TDSManagement = () => {
         filingStatus: apiData.filingStatus,
       });
     } catch (error) {
-      console.error('Failed to fetch TDS data:', error);
-      console.error('Error details:', error.response?.data);
       toast.error('Failed to load TDS data');
       setData({
         summary: {
@@ -140,7 +136,6 @@ const TDSManagement = () => {
       window.URL.revokeObjectURL(downloadUrl);
       toast.success('Form 26Q exported successfully');
     } catch (error) {
-      console.error('Export failed:', error);
       toast.error('Failed to export Form 26Q');
     }
   };
@@ -202,7 +197,6 @@ const TDSManagement = () => {
       setChallanDate(new Date().toISOString().split('T')[0]);
       fetchTDSData();
     } catch (error) {
-      console.error('TDS pay error:', error);
       toast.error(error.response?.data?.message || 'Failed to record payment');
     } finally {
       setPaying(false);
@@ -268,7 +262,6 @@ const TDSManagement = () => {
       });
       fetchTDSData();
     } catch (error) {
-      console.error('Create TDS entry error:', error);
       toast.error(error.response?.data?.message || 'Failed to create TDS entry');
     } finally {
       setCreating(false);

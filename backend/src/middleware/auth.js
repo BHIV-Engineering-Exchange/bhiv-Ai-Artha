@@ -10,6 +10,20 @@ const JWT_SECRET_ENV_CANDIDATES = [
   'BLACKHOLE_JWT_SECRET',
 ];
 
+let _UserModel = null;
+
+async function getUserModel() {
+  if (!_UserModel) {
+    try {
+      const mod = await import('../models/User.js');
+      _UserModel = mod.default;
+    } catch {
+      return null;
+    }
+  }
+  return _UserModel;
+}
+
 function getJwtVerificationSecrets() {
   const unique = new Set();
   const secrets = [];
@@ -127,7 +141,7 @@ export function requireAllowedApp(appId) {
 /**
  * Protect routes — `Authorization: Bearer <jwt>` (preferred) or legacy `blackhole_token` cookie.
  */
-export const protect = (req, res, next) => {
+export const protect = async (req, res, next) => {
   try {
     const token = extractAccessToken(req);
     const loginUrl = getAppLoginUrl();
@@ -146,16 +160,54 @@ export const protect = (req, res, next) => {
     try {
       const decoded = verifyBlackholeToken(token);
 
-      req.user = {
-        _id: decoded.user_id,
-        user_id: decoded.user_id,
-        email: decoded.email,
-        name: decoded.name || decoded.email?.split('@')[0] || 'User',
-        roles: decoded.roles || [],
-        role: decoded.roles?.[0] || 'user',
-        allowedApps: decoded.allowedApps || [],
-        isActive: true,
-      };
+      const User = await getUserModel();
+      if (User) {
+        const user = await User.findById(decoded.user_id).select('_id email name role roles isActive allowedApps');
+        if (!user) {
+          clearBlackholeCookie(res);
+          if (req.accepts('json') === 'json') {
+            return res.status(401).json({
+              success: false,
+              message: 'User not found',
+              redirect: loginUrl,
+            });
+          }
+          return res.redirect(loginUrl);
+        }
+        if (!user.isActive) {
+          clearBlackholeCookie(res);
+          if (req.accepts('json') === 'json') {
+            return res.status(403).json({
+              success: false,
+              message: 'Account is disabled',
+              redirect: loginUrl,
+            });
+          }
+          return res.redirect(loginUrl);
+        }
+
+        req.user = {
+          _id: user._id,
+          user_id: user._id,
+          email: user.email,
+          name: user.name || user.email?.split('@')[0] || 'User',
+          roles: user.roles || [user.role],
+          role: user.role,
+          allowedApps: user.allowedApps || [],
+          isActive: user.isActive,
+        };
+      } else {
+        req.user = {
+          _id: decoded.user_id,
+          user_id: decoded.user_id,
+          email: decoded.email,
+          name: decoded.name || decoded.email?.split('@')[0] || 'User',
+          roles: decoded.roles || [],
+          role: decoded.roles?.[0] || 'user',
+          allowedApps: decoded.allowedApps || [],
+          isActive: true,
+        };
+      }
 
       const appId = process.env.APP_ID || process.env.BHIV_APP_ID;
       if (appId && !(req.user.allowedApps || []).includes(appId)) {

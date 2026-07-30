@@ -86,17 +86,24 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const today = new Date();
-      const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
-      const lastDayOfYear = new Date(today.getFullYear(), 11, 31);
 
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const [stats, invoiceStats, expenseStats, recentInvoices, recentExpenses, revenueExpensesChart, expenseBreakdown, bankTimeline] = await Promise.allSettled([
+      const [statsResp, invoiceStats, expenseStats, recentInvoices, recentExpenses] = await Promise.allSettled([
         dashboardService.getStats(),
         dashboardService.getInvoiceStats(),
         dashboardService.getExpenseStats(),
         dashboardService.getRecentInvoices(),
         dashboardService.getRecentExpenses(),
-        api.get(`/reports/revenue-expenses-chart?year=${today.getFullYear()}`),
+      ]);
+
+      const stats = statsResp.status === 'fulfilled' ? statsResp.value.data.data : null;
+      const dataYear = stats?.dataYear || today.getFullYear();
+
+      const firstDayOfYear = new Date(dataYear, 0, 1);
+      const lastDayOfYear = new Date(dataYear, 11, 31);
+      const firstDayOfMonth = new Date(dataYear, today.getMonth(), 1);
+
+      const [revenueExpensesChart, expenseBreakdown, bankTimeline] = await Promise.allSettled([
+        api.get(`/reports/revenue-expenses-chart?year=${dataYear}`),
         api.get(`/reports/expense-breakdown?startDate=${firstDayOfYear.toISOString().split('T')[0]}&endDate=${lastDayOfYear.toISOString().split('T')[0]}`),
         dashboardService.getBankTransactionTimeline({
           startDate: firstDayOfMonth.toISOString().split('T')[0],
@@ -105,7 +112,7 @@ const Dashboard = () => {
       ]);
 
       setDashboardData({
-        stats: stats.status === 'fulfilled' ? stats.value.data.data : null,
+        stats,
         invoiceStats: invoiceStats.status === 'fulfilled' ? invoiceStats.value.data.data : null,
         expenseStats: expenseStats.status === 'fulfilled' ? expenseStats.value.data.data : null,
         recentInvoices: recentInvoices.status === 'fulfilled' ? recentInvoices.value.data.data : [],
@@ -119,6 +126,16 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const colorMap = {
+    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+    red: { bg: 'bg-red-100', text: 'text-red-600' },
+    yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
+    green: { bg: 'bg-green-100', text: 'text-green-600' },
+    purple: { bg: 'bg-purple-100', text: 'text-purple-600' },
+    orange: { bg: 'bg-orange-100', text: 'text-orange-600' },
+    gray: { bg: 'bg-gray-100', text: 'text-gray-600' },
   };
 
   const kpiCards = [
@@ -149,7 +166,7 @@ const Dashboard = () => {
     },
     {
       title: 'Outstanding Amount',
-      value: parseFloat(dashboardData.stats?.summary?.totalOutstanding || 0) || 
+      value: parseFloat(dashboardData.stats?.summary?.totalOutstanding || 0) ||
              (parseFloat(dashboardData.invoiceStats?.sent?.due || 0) + parseFloat(dashboardData.invoiceStats?.partial?.due || 0)),
       change: 0,
       changeType: 'decrease',
@@ -220,8 +237,8 @@ const Dashboard = () => {
                     : formatCurrency(kpi.value)}
                 </p>
               </div>
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-${kpi.color}-100`}>
-                <kpi.icon className={`w-5 h-5 text-${kpi.color}-600`} />
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorMap[kpi.color]?.bg || 'bg-gray-100'}`}>
+                <kpi.icon className={`w-5 h-5 ${colorMap[kpi.color]?.text || 'text-gray-600'}`} />
               </div>
             </div>
             {kpi.change !== 0 && (

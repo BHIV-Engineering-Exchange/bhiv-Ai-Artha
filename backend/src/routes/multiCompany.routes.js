@@ -6,18 +6,18 @@ const router = express.Router();
 
 router.use(protect);
 
-router.post('/companies', multiCompanyController.createCompany);
-router.get('/companies', multiCompanyController.getCompanies);
-router.get('/companies/:id', multiCompanyController.getCompany);
-router.put('/companies/:id', multiCompanyController.updateCompany);
+router.post('/companies', authorize('admin'), multiCompanyController.createCompany);
+router.get('/companies', authorize('admin', 'accountant', 'viewer'), multiCompanyController.getCompanies);
+router.get('/companies/:id', authorize('admin', 'accountant', 'viewer'), multiCompanyController.getCompany);
+router.put('/companies/:id', authorize('admin'), multiCompanyController.updateCompany);
 
-router.post('/companies/:companyId/branches', multiCompanyController.createBranch);
-router.get('/companies/:companyId/branches', multiCompanyController.getBranches);
+router.post('/companies/:companyId/branches', authorize('admin'), multiCompanyController.createBranch);
+router.get('/companies/:companyId/branches', authorize('admin', 'accountant', 'viewer'), multiCompanyController.getBranches);
 
-router.post('/companies/:companyId/consolidated-report', multiCompanyController.getConsolidatedReport);
-router.post('/consolidated-trial-balance', multiCompanyController.getConsolidatedTrialBalance);
+router.post('/companies/:companyId/consolidated-report', authorize('admin'), multiCompanyController.getConsolidatedReport);
+router.post('/consolidated-trial-balance', authorize('admin', 'accountant'), multiCompanyController.getConsolidatedTrialBalance);
 
-router.post('/cost-centres', multiCompanyController.createCostCentre);
-router.get('/cost-centres', multiCompanyController.getCostCentres);
+router.post('/cost-centres', authorize('admin'), multiCompanyController.createCostCentre);
+router.get('/cost-centres', authorize('admin', 'accountant', 'viewer'), multiCompanyController.getCostCentres);
 
 export default router;

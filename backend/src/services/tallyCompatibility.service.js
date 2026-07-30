@@ -8,8 +8,8 @@ import TallyExport from '../models/TallyExport.js';
 import TallyImport from '../models/TallyImport.js';
 import AccountBalance from '../models/AccountBalance.js';
 import Decimal from 'decimal.js';
-import { parse } from 'csv-parse/sync';
 import fs from 'fs/promises';
+import { parse } from 'csv-parse/sync';
 
 logger.info('[TALLY-SERVICE] v2.1.0 loaded - MASTERS_MAP fix active');
 
@@ -722,6 +722,154 @@ class TallyCompatibilityService {
 
   // ─────────── GENERIC INGESTION PIPELINE ───────────
 
+  async parseExcelFile(filePath) {
+    const XLSX = await import('xlsx');
+    const fileBuffer = await fs.readFile(filePath);
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!rows.length) return [];
+
+    const firstRow = rows[0];
+    const headers = Object.keys(firstRow).map(h => h.toLowerCase().trim());
+
+    // Detect format: single-row-per-voucher (has DebitAccount/CreditAccount or From/To)
+    const hasDualAccount = headers.some(h =>
+      ['debitaccount', 'creditaccount', 'debit_account', 'credit_account', 'fromaccount', 'toaccount', 'from_account', 'to_account', 'dr_account', 'cr_account', 'debit ledger', 'credit ledger'].includes(h)
+    );
+
+    if (hasDualAccount) {
+      return this.parseExcelSingleRow(rows);
+    }
+    return this.parseExcelMultiRow(rows);
+  }
+
+  parseExcelSingleRow(rows) {
+    const voucherMap = new Map();
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const get = (keys) => {
+        for (const k of keys) {
+          const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+          if (val !== undefined && val !== '') return String(val).trim();
+        }
+        return '';
+      };
+
+      const dateStr = get(['Date', 'VoucherDate', 'Transaction Date', 'Txn Date']);
+      let date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        const parts = dateStr.split(/[/-]/);
+        if (parts.length === 3) date = new Date(parts[2], parts[1] - 1, parts[0]);
+      }
+      if (isNaN(date.getTime())) date = new Date();
+
+      const voucherNumber = get(['VoucherNumber', 'Vch No', 'Voucher No', 'RefNo', 'Voucher No.']) || `XLX-${String(i + 1).padStart(5, '0')}`;
+      const voucherType = get(['VoucherType', 'Vch Type', 'Type', 'Voucher Type']) || 'Journal';
+      const narration = get(['Narration', 'Description', 'Particulars', 'Remarks', 'Notes']);
+      const party = get(['PartyName', 'Party', 'Customer', 'Vendor']);
+
+      const debitAccount = get(['DebitAccount', 'Debit Account', 'Dr Account', 'FromAccount', 'From Account', 'Debit Ledger', 'Dr Ledger']);
+      const creditAccount = get(['CreditAccount', 'Credit Account', 'Cr Account', 'ToAccount', 'To Account', 'Credit Ledger', 'Cr Ledger']);
+      const amountStr = get(['Amount', 'Amount (₹)', 'Value']);
+
+      if (!debitAccount && !creditAccount) continue;
+
+      const amount = amountStr ? new Decimal(amountStr.replace(/,/g, '')).toNumber() : 0;
+      if (amount <= 0) continue;
+
+      const key = `${date.toISOString().slice(0, 10)}|${voucherNumber}|${voucherType}`;
+      if (!voucherMap.has(key)) {
+        voucherMap.set(key, {
+          date: dateStr || date.toISOString(),
+          number: voucherNumber,
+          type: voucherType,
+          narration,
+          party,
+          ledgerEntries: [],
+          amount: '0',
+        });
+      }
+
+      const voucher = voucherMap.get(key);
+      if (debitAccount) voucher.ledgerEntries.push({ ledgerName: debitAccount, amount, isDebit: true });
+      if (creditAccount) voucher.ledgerEntries.push({ ledgerName: creditAccount, amount, isDebit: false });
+    }
+
+    return Array.from(voucherMap.values());
+  }
+
+  parseExcelMultiRow(rows) {
+    const voucherMap = new Map();
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const get = (keys) => {
+        for (const k of keys) {
+          const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+          if (val !== undefined && val !== '') return String(val).trim();
+        }
+        return '';
+      };
+
+      const dateStr = get(['Date', 'VoucherDate', 'Transaction Date', 'Txn Date']);
+      let date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        const parts = dateStr.split(/[/-]/);
+        if (parts.length === 3) date = new Date(parts[2], parts[1] - 1, parts[0]);
+      }
+      if (isNaN(date.getTime())) date = new Date();
+
+      const voucherNumber = get(['VoucherNumber', 'Vch No', 'Voucher No', 'RefNo']) || `XLX-${String(i + 1).padStart(5, '0')}`;
+      const voucherType = get(['VoucherType', 'Vch Type', 'Type', 'Voucher Type']) || 'Journal';
+      const ledgerName = get(['LedgerName', 'Account', 'Ledger', 'Account Name', 'PartyName', 'Party']);
+      const narration = get(['Narration', 'Description', 'Particulars', 'Remarks', 'Notes']);
+      const party = get(['PartyName', 'Party', 'Customer', 'Vendor']);
+
+      const debitStr = get(['Debit', 'DebitAmount', 'dr', 'Dr', 'Withdrawal']);
+      const creditStr = get(['Credit', 'CreditAmount', 'cr', 'Cr', 'Deposit']);
+      const amountStr = get(['Amount']);
+
+      let amount = 0;
+      let isDebit = false;
+
+      if (debitStr && new Decimal(debitStr.replace(/,/g, '')).greaterThan(0)) {
+        amount = new Decimal(debitStr.replace(/,/g, '')).toNumber();
+        isDebit = true;
+      } else if (creditStr && new Decimal(creditStr.replace(/,/g, '')).greaterThan(0)) {
+        amount = new Decimal(creditStr.replace(/,/g, '')).toNumber();
+        isDebit = false;
+      } else if (amountStr) {
+        const num = new Decimal(amountStr.replace(/,/g, ''));
+        amount = num.abs().toNumber();
+        isDebit = num.greaterThan(0);
+      }
+
+      const key = `${date.toISOString().slice(0, 10)}|${voucherNumber}|${voucherType}`;
+      if (!voucherMap.has(key)) {
+        voucherMap.set(key, {
+          date: dateStr || date.toISOString(),
+          number: voucherNumber,
+          type: voucherType,
+          narration,
+          party,
+          ledgerEntries: [],
+          amount: '0',
+        });
+      }
+
+      const voucher = voucherMap.get(key);
+      if (ledgerName && ledgerName.trim()) {
+        voucher.ledgerEntries.push({ ledgerName: ledgerName.trim(), amount, isDebit });
+      }
+    }
+
+    return Array.from(voucherMap.values());
+  }
+
   async ingestFile(filePath, fileType, options = {}) {
     const { userId, companyId, source = 'unknown', createJournals = true } = options;
 
@@ -740,6 +888,9 @@ class TallyCompatibilityService {
         const parsed = JSON.parse(content);
         vouchers = Array.isArray(parsed) ? parsed : parsed.vouchers || parsed.data || [];
         format = 'json';
+      } else if (fileType === 'xlsx' || fileType === 'xls' || filePath.endsWith('.xlsx') || filePath.endsWith('.xls')) {
+        vouchers = await this.parseExcelFile(filePath);
+        format = 'xlsx';
       } else {
         throw new Error(`Unsupported file type: ${fileType}`);
       }

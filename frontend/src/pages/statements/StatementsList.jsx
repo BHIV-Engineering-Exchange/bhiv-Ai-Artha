@@ -29,7 +29,7 @@ const Statements = () => {
         ...pagination,
       });
 
-      setStatements(response.data.statements);
+      setStatements(response.data.data || []);
       setPagination(response.data.pagination);
     } catch (error) {
       console.error('Error loading statements:', error);

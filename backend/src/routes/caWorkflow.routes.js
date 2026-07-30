@@ -6,11 +6,11 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/periods', caWorkflowController.getPeriods);
-router.post('/periods', caWorkflowController.getOrCreatePeriod);
-router.post('/periods/:periodId/month-close', caWorkflowController.monthClose);
-router.post('/periods/:periodId/quarter-close', caWorkflowController.quarterClose);
-router.post('/periods/:periodId/annual-close', caWorkflowController.annualClose);
-router.get('/periods/:periodId/trial-balance', caWorkflowController.generateTrialBalance);
+router.get('/periods', authorize('admin', 'accountant', 'viewer'), caWorkflowController.getPeriods);
+router.post('/periods', authorize('admin'), caWorkflowController.getOrCreatePeriod);
+router.post('/periods/:periodId/month-close', authorize('admin'), caWorkflowController.monthClose);
+router.post('/periods/:periodId/quarter-close', authorize('admin'), caWorkflowController.quarterClose);
+router.post('/periods/:periodId/annual-close', authorize('admin'), caWorkflowController.annualClose);
+router.get('/periods/:periodId/trial-balance', authorize('admin', 'accountant', 'viewer'), caWorkflowController.generateTrialBalance);
 
 export default router;

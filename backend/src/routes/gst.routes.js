@@ -48,12 +48,12 @@ router.route('/summary').get(getGSTSummaryController);
 
 // GST Filing routes
 router.route('/filing-packet/gstr-1').get(
-  authorize('accountant', 'admin'),
+  authorize('accountant', 'admin', 'viewer'),
   getGSTR1FilingPacket
 );
 
 router.route('/filing-packet/gstr-3b').get(
-  authorize('accountant', 'admin'),
+  authorize('accountant', 'admin', 'viewer'),
   getGSTR3BFilingPacket
 );
 

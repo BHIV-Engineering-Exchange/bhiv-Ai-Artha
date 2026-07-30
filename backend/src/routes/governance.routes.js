@@ -9,7 +9,7 @@
  */
 
 import express from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 import capabilityRegistry from '../services/capabilityRegistry.service.js';
 import provenanceChain from '../services/provenanceChain.service.js';
 import deterministicReplay from '../services/deterministicReplay.service.js';
@@ -165,7 +165,7 @@ router.get('/circuit-breakers', protect, (req, res) => {
   }
 });
 
-router.post('/circuit-breakers/:name/reset', protect, (req, res) => {
+router.post('/circuit-breakers/:name/reset', protect, authorize('admin'), (req, res) => {
   try {
     circuitBreaker.forceReset(req.params.name);
     res.json({ success: true, message: `Circuit breaker ${req.params.name} reset` });
@@ -177,7 +177,7 @@ router.post('/circuit-breakers/:name/reset', protect, (req, res) => {
 
 // ─── Independent Verification ────────────────────────────────────────────
 
-router.get('/verification/run', protect, async (req, res) => {
+router.get('/verification/run', protect, authorize('admin'), async (req, res) => {
   try {
     const results = await independentVerifier.runVerificationSuite({
       triggered_by: req.user?.email || 'unknown',
@@ -201,7 +201,7 @@ router.get('/verification/history', protect, (req, res) => {
 
 // ─── Adversarial Testing ────────────────────────────────────────────────
 
-router.get('/adversarial/run', protect, async (req, res) => {
+router.get('/adversarial/run', protect, authorize('admin'), async (req, res) => {
   try {
     const results = await adversarialSuite.runFullSuite({
       triggered_by: req.user?.email || 'unknown',
@@ -425,7 +425,7 @@ router.get('/setu/trace/:traceId', protect, async (req, res) => {
   }
 });
 
-router.post('/setu/retry/:dispatchId', protect, async (req, res) => {
+router.post('/setu/retry/:dispatchId', protect, authorize('admin'), async (req, res) => {
   try {
     const result = await setuDispatch.retryDispatch(req.params.dispatchId);
     res.json({ success: result.success, data: result });

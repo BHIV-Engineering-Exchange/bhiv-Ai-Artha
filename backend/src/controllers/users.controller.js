@@ -131,7 +131,8 @@ export const createUser = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Email already in use' });
     }
     logger.error('Create user error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Could not create user' });
+    const message = process.env.NODE_ENV === 'production' ? 'Could not create user' : (error.message || 'Could not create user');
+    res.status(500).json({ success: false, message });
   }
 };
 
@@ -161,6 +162,12 @@ export const updateUser = async (req, res) => {
     if (department !== undefined) user.department = String(department).trim();
     if (status !== undefined) user.isActive = status !== 'inactive';
     if (password && String(password).length > 0) {
+      if (password.length < 8) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ success: false, message: 'Password must contain uppercase, lowercase, and a number' });
+      }
       user.password = password;
     }
 

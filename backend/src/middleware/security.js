@@ -7,14 +7,20 @@ import { validateJWTConfig, validateRedisConfig } from '../config/validation.js'
 
 // Helmet configuration
 export const helmetConfig = helmet({
-  contentSecurityPolicy: false, // Disable CSP for API
-  crossOriginResourcePolicy: false, // Allow cross-origin requests
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true,
   },
+  referrerPolicy: { policy: 'no-referrer' },
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true,
+  frameguard: { action: 'deny' },
 });
 
 // Validate security configuration on load
@@ -34,7 +40,7 @@ export const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'development', // Skip in development
+  skip: (req) => false,
 });
 
 function authRateLimitKey(req) {
@@ -53,7 +59,7 @@ export const authPasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  skip: (req) => process.env.NODE_ENV === 'development',
+  skip: (req) => false,
 });
 
 export const authSignupLimiter = rateLimit({
@@ -64,7 +70,7 @@ export const authSignupLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  skip: (req) => process.env.NODE_ENV === 'development',
+  skip: (req) => false,
 });
 
 /** @deprecated use authPasswordLimiter */
@@ -90,12 +96,23 @@ export const validate = (req, res, next) => {
 
 // Sanitize input (remove potential XSS)
 export const sanitizeInput = (req, res, next) => {
+  const XSS_PATTERNS = [
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    /javascript\s*:/gi,
+    /on\w+\s*=\s*["'][^"']*["']/gi,
+    /<iframe\b[^>]*>/gi,
+    /<object\b[^>]*>/gi,
+    /<embed\b[^>]*>/gi,
+    /<form\b[^>]*>/gi,
+  ];
+
   const sanitize = (obj) => {
     for (const key in obj) {
       if (typeof obj[key] === 'string') {
         obj[key] = obj[key].trim();
-        // Remove potential script tags
-        obj[key] = obj[key].replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+        for (const pattern of XSS_PATTERNS) {
+          obj[key] = obj[key].replace(pattern, '');
+        }
       } else if (typeof obj[key] === 'object' && obj[key] !== null) {
         sanitize(obj[key]);
       }

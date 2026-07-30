@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import { randomUUID } from 'crypto';
 
+const validateDecimal = {
+  validator: (v) => v === '' || v === null || v === undefined || (!isNaN(Number(v)) && isFinite(Number(v)) && Number(v) >= 0),
+  message: '{VALUE} is not a valid non-negative decimal amount',
+};
+
 const journalLineSchema = new mongoose.Schema(
   {
     id: {
@@ -20,14 +25,14 @@ const journalLineSchema = new mongoose.Schema(
       index: true,
     },
     debit: {
-      type: Number,
-      default: 0,
-      min: 0,
+      type: String,
+      default: '0',
+      validate: validateDecimal,
     },
     credit: {
-      type: Number,
-      default: 0,
-      min: 0,
+      type: String,
+      default: '0',
+      validate: validateDecimal,
     },
   },
   {

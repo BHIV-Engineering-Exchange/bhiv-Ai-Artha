@@ -96,8 +96,7 @@
     "cert:enterprise": "node scripts/enterprise_certification.js --ci",
     "cert:enterprise:json": "node scripts/enterprise_certification.js --ci --json",
     "governance:pipeline": "node ci/governance_validation_pipeline/index.js --ci",
-    "governance:full": "npm run governance:pipeline && npm run test:adversarial && npm run verify:all",
-    "prepare": "node -e \"try { require('husky').install() } catch (e) {if (e.code !== 'MODULE_NOT_FOUND') throw e}\""
+    "governance:full": "npm run governance:pipeline && npm run test:adversarial && npm run verify:all"
   },
   "dependencies": {
     "axios": "^1.6.2",

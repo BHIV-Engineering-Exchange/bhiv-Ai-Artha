@@ -114,6 +114,22 @@ const ExpenseCreate = () => {
     }
   }, []);
 
+  const handleFiles = useCallback((fileList) => {
+    const newFiles = Array.from(fileList).filter((file) => {
+      const isValid = file.type.startsWith('image/') || file.type === 'application/pdf';
+      const isSmallEnough = file.size <= 10 * 1024 * 1024;
+      return isValid && isSmallEnough;
+    });
+
+    setFiles((prev) => {
+      if (prev.length + newFiles.length > 5) {
+        toast.error('Maximum 5 files allowed');
+        return prev;
+      }
+      return [...prev, ...newFiles];
+    });
+  }, []);
+
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -122,27 +138,7 @@ const ExpenseCreate = () => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files);
     }
-  }, []);
-
-  const handleFiles = (fileList) => {
-    const newFiles = Array.from(fileList).filter((file) => {
-      const isValid = file.type.startsWith('image/') || file.type === 'application/pdf';
-      const isSmallEnough = file.size <= 10 * 1024 * 1024;
-      return isValid && isSmallEnough;
-    });
-
-    if (files.length + newFiles.length > 5) {
-      toast.error('Maximum 5 files allowed');
-      return;
-    }
-
-    setFiles((prev) => [...prev, ...newFiles]);
-
-    const firstImage = newFiles.find((f) => f.type.startsWith('image/'));
-    if (firstImage && files.length === 0) {
-      autoScanReceipt(firstImage);
-    }
-  };
+  }, [handleFiles]);
 
   const autoScanReceipt = async (file) => {
     setScanning(true);
@@ -234,7 +230,8 @@ const ExpenseCreate = () => {
       formData.append('date', data.date);
       formData.append('amount', String(data.amount));
       formData.append('taxAmount', String(data.gstAmount || 0));
-      formData.append('totalAmount', String(data.amount));
+      const gstAmt = parseFloat(data.gstAmount || 0);
+      formData.append('totalAmount', String(parseFloat(data.amount) + gstAmt));
       formData.append('paymentMethod', 'other');
       if (data.gstRate) formData.append('gstRate', String(data.gstRate));
       if (data.supplierState) formData.append('supplierState', data.supplierState);
@@ -257,7 +254,6 @@ const ExpenseCreate = () => {
       }
       navigate('/expenses');
     } catch (error) {
-      console.error('Expense save error:', error.response?.data);
       toast.error(error.response?.data?.message || 'Failed to save expense');
     } finally {
       setSaving(false);

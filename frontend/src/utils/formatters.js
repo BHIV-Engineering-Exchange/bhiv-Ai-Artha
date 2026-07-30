@@ -11,7 +11,8 @@ export const formatCurrency = (amount, options = {}) => {
     maximumFractionDigits: decimals,
   });
 
-  return formatter.format(amount || 0);
+  const num = Number(amount);
+  return formatter.format(Number.isNaN(num) ? 0 : num);
 };
 
 /**
@@ -21,6 +22,7 @@ export const formatDate = (date, format = 'short') => {
   if (!date) return '-';
   
   const d = new Date(date);
+  if (isNaN(d.getTime())) return '-';
   
   const formats = {
     short: { day: '2-digit', month: 'short', year: 'numeric' },

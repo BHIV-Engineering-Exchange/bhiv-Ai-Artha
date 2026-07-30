@@ -115,6 +115,8 @@ class TallyController {
         const content = await fs.readFile(req.file.path, 'utf-8');
         const parsed = JSON.parse(content);
         vouchers = Array.isArray(parsed) ? parsed : parsed.vouchers || parsed.data || [];
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        vouchers = await tallyCompatibilityService.parseExcelFile(req.file.path);
       }
 
       await fs.unlink(req.file.path).catch(() => {});

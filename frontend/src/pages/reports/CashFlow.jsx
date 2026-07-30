@@ -243,6 +243,16 @@ const CashFlow = () => {
     return <Loading.Page />;
   }
 
+  const colorMap = {
+    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+    red: { bg: 'bg-red-100', text: 'text-red-600' },
+    yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
+    green: { bg: 'bg-green-100', text: 'text-green-600' },
+    purple: { bg: 'bg-purple-100', text: 'text-purple-600' },
+    orange: { bg: 'bg-orange-100', text: 'text-orange-600' },
+    gray: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  };
+
   const categories = [
     { key: 'operations', label: 'Operating Activities', icon: Building2, data: data?.operations, color: 'blue' },
     { key: 'investing', label: 'Investing Activities', icon: TrendingUp, data: data?.investing, color: 'purple' },
@@ -373,8 +383,8 @@ const CashFlow = () => {
         {categories.map((category) => (
           <Card key={category.key} className="p-6">
             <div className={`flex items-center gap-3 mb-4 pb-4 border-b border-border`}>
-              <div className={`w-10 h-10 bg-${category.color}-100 rounded-lg flex items-center justify-center`}>
-                <category.icon className={`w-5 h-5 text-${category.color}-600`} />
+              <div className={`w-10 h-10 ${colorMap[category.color]?.bg || 'bg-gray-100'} rounded-lg flex items-center justify-center`}>
+                <category.icon className={`w-5 h-5 ${colorMap[category.color]?.text || 'text-gray-600'}`} />
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">{category.label}</h3>

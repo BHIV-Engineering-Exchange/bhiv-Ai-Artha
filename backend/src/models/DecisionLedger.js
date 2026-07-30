@@ -22,6 +22,8 @@ const decisionLedgerSchema = new mongoose.Schema({
       'ADVERSARIAL_BLOCK',
       'GOVERNANCE_ACTION',
       'DEPLOYMENT_DECISION',
+      'RUNTIME_REGISTRATION',
+      'RUNTIME_DEREGISTRATION',
     ],
     index: true,
   },
