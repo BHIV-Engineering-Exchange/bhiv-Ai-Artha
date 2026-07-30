@@ -6,6 +6,7 @@ import expenseRoutes from './expense.routes.js';
 import insightflowRoutes from './insightflow.routes.js';
 import runtimeRoutes from './runtime.routes.js';
 import usersRoutes from './users.routes.js';
+import financialRuntimeRoutes from './financialRuntime.routes.js';
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.use('/v1/expenses', expenseRoutes);
 router.use('/v1/insightflow', insightflowRoutes);
 router.use('/v1/runtime', runtimeRoutes);
 router.use('/v1/users', usersRoutes);
+router.use('/v1/financial-runtime', financialRuntimeRoutes);
 router.use('/users', usersRoutes);
 
 export default router;

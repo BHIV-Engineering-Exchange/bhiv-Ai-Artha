@@ -1,5 +1,7 @@
 import expenseService from '../services/expense.service.js';
 import logger from '../config/logger.js';
+import financialEventEmitter from '../services/financialEventEmitter.service.js';
+import financialIntegration from '../services/financialIntegration.service.js';
 
 // @desc    Create expense
 // @route   POST /api/v1/expenses
@@ -12,6 +14,12 @@ export const createExpense = async (req, res) => {
       req.files
     );
     
+    // Emit immutable financial event
+    await financialEventEmitter.emitExpenseSubmitted(expense, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onExpenseSubmitted(expense, req.user._id);
+
     res.status(201).json({
       success: true,
       data: expense,
@@ -133,6 +141,12 @@ export const updateExpense = async (req, res) => {
 export const approveExpense = async (req, res) => {
   try {
     const { expense, autoRecordWarning } = await expenseService.approveExpense(req.params.id, req.user._id);
+
+    // Emit immutable financial event
+    await financialEventEmitter.emitExpenseApproved(expense, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onExpenseApproved(expense, req.user._id);
 
     const response = { success: true, data: expense };
     if (autoRecordWarning) {

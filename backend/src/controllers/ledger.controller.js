@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import auditService from '../services/audit.service.js';
 import evidenceAutomationService from '../services/evidenceAutomation.service.js';
 import tantraService from '../services/tantra.service.js';
+import financialEventEmitter from '../services/financialEventEmitter.service.js';
+import financialIntegration from '../services/financialIntegration.service.js';
 
 // @desc    Create journal entry
 // @route   POST /api/v1/ledger/entries
@@ -46,6 +48,12 @@ export const createEntry = async (req, res) => {
       entityId: entry._id,
       details: { entryNumber: entry.entryNumber, totalDebit: entry.totalDebit },
     });
+
+    // Emit immutable financial event
+    await financialEventEmitter.emitJournalCreated(entry, req.user._id);
+
+    // Financial integration hooks (provenance, decision ledger, insightflow)
+    await financialIntegration.onJournalCreated(entry, req.user._id);
 
     res.status(201).json({
       success: true,
@@ -117,6 +125,16 @@ export const createReversalEntry = async (req, res) => {
       req.body?.reason || null
     );
 
+    // Emit immutable financial event
+    await financialEventEmitter.emitJournalReversed(
+      { _id: req.params.id }, entry, req.user._id
+    );
+
+    // Financial integration hooks
+    await financialIntegration.onJournalReversed(
+      { _id: req.params.id }, entry, req.user._id
+    );
+
     res.status(201).json({
       success: true,
       data: entry,
@@ -171,6 +189,12 @@ export const validateEntry = async (req, res) => {
       entityId: entry._id,
       details: { entryNumber: entry.entryNumber, status: entry.status },
     });
+
+    // Emit immutable financial event
+    await financialEventEmitter.emitJournalValidated(entry, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onJournalPosted(entry, req.user._id);
 
     res.json({
       success: true,
@@ -228,6 +252,12 @@ export const postEntry = async (req, res) => {
       entityId: entry._id,
       details: { entryNumber: entry.entryNumber, totalDebit: entry.totalDebit },
     });
+
+    // Emit immutable financial event
+    await financialEventEmitter.emitJournalPosted(entry, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onJournalPosted(entry, req.user._id);
 
     res.json({
       success: true,
@@ -316,6 +346,12 @@ export const voidEntry = async (req, res) => {
     }
 
     const result = await ledgerService.voidJournalEntry(req.params.id, req.user._id, reason);
+
+    // Emit immutable financial event
+    await financialEventEmitter.emitJournalVoided(result, req.user._id, reason);
+
+    // Financial integration hooks
+    await financialIntegration.onJournalVoided(result, req.user._id, reason);
 
     res.json({
       success: true,

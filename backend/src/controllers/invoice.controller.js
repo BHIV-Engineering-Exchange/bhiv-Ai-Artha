@@ -1,6 +1,8 @@
 import invoiceService from '../services/invoice.service.js';
 import pdfService from '../services/pdf.service.js';
 import logger from '../config/logger.js';
+import financialEventEmitter from '../services/financialEventEmitter.service.js';
+import financialIntegration from '../services/financialIntegration.service.js';
 
 // @desc    Create invoice
 // @route   POST /api/v1/invoices
@@ -14,6 +16,12 @@ export const createInvoice = async (req, res) => {
     
     const invoice = await invoiceService.createInvoice(req.body, req.user._id);
     
+    // Emit immutable financial event
+    await financialEventEmitter.emitInvoiceCreated(invoice, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onInvoiceCreated(invoice, req.user._id);
+
     res.status(201).json({
       success: true,
       data: invoice,
@@ -137,6 +145,12 @@ export const recordPayment = async (req, res) => {
       req.user._id
     );
     
+    // Emit immutable financial event
+    await financialEventEmitter.emitInvoicePaid(invoice, req.body, req.user._id);
+
+    // Financial integration hooks
+    await financialIntegration.onInvoicePaid(invoice, req.body, req.user._id);
+
     res.json({
       success: true,
       data: invoice,

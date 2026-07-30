@@ -7,6 +7,9 @@ import connectDB from './config/database.js';
 import { connectRedis } from './config/redis.js';
 import logger from './config/logger.js';
 import './models/Counter.js';
+import './models/FinancialEvent.js';
+import './models/LedgerLock.js';
+import './models/ReportSnapshot.js';
 import healthService from './services/health.service.js';
 import { validateEnvironment } from './config/validation.js';
 import { buildAllowedOrigins } from './config/cors.js';
@@ -75,6 +78,7 @@ import tallyRoutes from './routes/tally.routes.js';
 import multiCompanyRoutes from './routes/multiCompany.routes.js';
 import tantraRoutes from './routes/tantra.routes.js';
 import governanceRoutes from './routes/governance.routes.js';
+import financialRuntimeRoutes from './routes/financialRuntime.routes.js';
 import observabilityService from './services/observability.service.js';
 import bankingService from './services/banking.service.js';
 import auditService from './services/audit.service.js';
@@ -82,6 +86,9 @@ import caWorkflowService from './services/caWorkflow.service.js';
 import setuDispatch from './services/setuDispatch.service.js';
 import decisionLedger from './services/decisionLedger.service.js';
 import tantraExecutionChain from './services/tantraExecutionChain.service.js';
+import financialIntegration from './services/financialIntegration.service.js';
+import bucketProvenance from './services/bucketProvenance.service.js';
+import replayValidationSuite from './services/replayValidationSuite.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +127,11 @@ connectDB();
     deploymentEvidence.initialize({ version: '0.1.0' });
     setuDispatch.initialize();
     tantraExecutionChain.initialize();
+
+    // Initialize Financial Runtime integration
+    await financialIntegration.initialize();
+    bucketProvenance.initialize();
+    replayValidationSuite.initialize();
 
     // Initialize BHIV Runtime Bridge services
     insightFlow.initialize();
@@ -305,6 +317,7 @@ app.use('/api/v1/tally', tallyRoutes);
 app.use('/api/v1/multi-company', multiCompanyRoutes);
 app.use('/api/v1/tantra', tantraRoutes);
 app.use('/api/v1/governance', governanceRoutes);
+app.use('/api/v1/financial-runtime', financialRuntimeRoutes);
 
 // SETU callback webhook endpoint (delegated to setuDispatch service)
 // Protected by HMAC signature verification for external webhook security
