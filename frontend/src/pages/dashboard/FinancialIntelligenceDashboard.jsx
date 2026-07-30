@@ -187,10 +187,10 @@ const FinancialIntelligenceDashboard = () => {
 
       if (signal?.aborted) return;
 
-      setDashboardData(dashResult.status === 'fulfilled' ? dashResult.value.data.data : null);
-      setRevenueExpensesChart(chartResult.status === 'fulfilled' ? chartResult.value.data.data : []);
-      setExpenseBreakdown(breakdownResult.status === 'fulfilled' ? breakdownResult.value.data.data : []);
-      setBankTimeline(timelineResult.status === 'fulfilled' ? timelineResult.value.data.data : []);
+      setDashboardData(dashResult.status === 'fulfilled' ? (dashResult.value.data?.data || null) : null);
+      setRevenueExpensesChart(chartResult.status === 'fulfilled' ? (chartResult.value.data?.data || []) : []);
+      setExpenseBreakdown(breakdownResult.status === 'fulfilled' ? (breakdownResult.value.data?.data || []) : []);
+      setBankTimeline(timelineResult.status === 'fulfilled' ? (timelineResult.value.data?.data || []) : []);
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       setError(err.message);

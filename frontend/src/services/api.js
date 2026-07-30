@@ -43,7 +43,15 @@ const api = axios.create({
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const contentType = response.headers?.['content-type'] || '';
+    if (contentType.includes('text/html') || (typeof response.data === 'string' && response.data.trim().startsWith('<!DOCTYPE'))) {
+      const error = new Error('Invalid API response: received HTML instead of JSON');
+      error.response = response;
+      return Promise.reject(error);
+    }
+    return response;
+  },
   (error) => {
     const reqUrl = error.config?.url || '';
     const silent401Me = error.response?.status === 401 && reqUrl.includes('/auth/me');

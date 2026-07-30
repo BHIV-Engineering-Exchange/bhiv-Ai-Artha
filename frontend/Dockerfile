@@ -5,7 +5,12 @@ WORKDIR /app
 COPY package*.json .
 RUN npm ci
 
+# Copy source code
 COPY . .
+
+# Expose VITE_API_URL build-arg to Vite build
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 
