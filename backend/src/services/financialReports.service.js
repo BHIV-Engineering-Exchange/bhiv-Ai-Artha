@@ -961,11 +961,14 @@ class FinancialReportsService {
    */
   async generateExpenseBreakdown(startDate, endDate) {
     try {
-      const expenses = await Expense.aggregate([
+      let matchStart = new Date(startDate);
+      let matchEnd = new Date(endDate);
+
+      let expenses = await Expense.aggregate([
         {
           $match: {
             status: { $in: ['approved', 'recorded'] },
-            date: { $gte: new Date(startDate), $lte: new Date(endDate) },
+            date: { $gte: matchStart, $lte: matchEnd },
           },
         },
         {
@@ -976,6 +979,40 @@ class FinancialReportsService {
         },
         { $sort: { total: -1 } },
       ]);
+
+      // If no expenses in the requested range, auto-detect the data year
+      if (expenses.length === 0) {
+        const latestExpense = await Expense.findOne({ status: { $in: ['approved', 'recorded'] } })
+          .sort({ date: -1 })
+          .lean()
+          .catch(() => null);
+
+        if (latestExpense) {
+          const dataYear = new Date(latestExpense.date).getFullYear();
+          const requestedYear = matchStart.getFullYear();
+
+          if (dataYear !== requestedYear) {
+            matchStart = new Date(dataYear, 0, 1);
+            matchEnd = new Date(dataYear, 11, 31);
+
+            expenses = await Expense.aggregate([
+              {
+                $match: {
+                  status: { $in: ['approved', 'recorded'] },
+                  date: { $gte: matchStart, $lte: matchEnd },
+                },
+              },
+              {
+                $group: {
+                  _id: '$category',
+                  total: { $sum: { $toDouble: '$totalAmount' } },
+                },
+              },
+              { $sort: { total: -1 } },
+            ]);
+          }
+        }
+      }
 
       const totalExpenses = expenses.reduce((sum, exp) => sum + exp.total, 0);
 
@@ -1093,11 +1130,15 @@ class FinancialReportsService {
       // Detect the most recent data year from journal entries so the dashboard
       // shows meaningful numbers even when the seed data is from a prior year.
       const latestEntry = await JournalEntry.findOne().sort({ date: -1 }).lean().catch(() => null);
-      const dataYear = latestEntry ? new Date(latestEntry.date).getFullYear() : today.getFullYear();
+      const referenceDate = latestEntry ? new Date(latestEntry.date) : today;
+      const dataYear = referenceDate.getFullYear();
       const useYear = today.getFullYear() === dataYear ? today.getFullYear() : dataYear;
 
-      const firstDayOfMonth = new Date(useYear, today.getMonth(), 1);
-      const lastDayOfMonth = new Date(useYear, today.getMonth() + 1, 0);
+      // Use the month from the latest entry (not today) so the dashboard
+      // shows the most recent month with actual data.
+      const refMonth = referenceDate.getMonth();
+      const firstDayOfMonth = new Date(useYear, refMonth, 1);
+      const lastDayOfMonth = new Date(useYear, refMonth + 1, 0);
       const firstDayOfYear = new Date(useYear, 0, 1);
 
       // Get current month and year P&L

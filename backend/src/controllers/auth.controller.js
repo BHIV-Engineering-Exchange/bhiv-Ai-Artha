@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import logger from '../config/logger.js';
 import { signAccessToken } from '../utils/authToken.js';
 import { getBlackholeCookieOptions, clearBlackholeCookie } from '../middleware/auth.js';
+import activationCodeService from '../services/activationCode.service.js';
 
 const COOKIE_NAME = 'blackhole_token';
 
@@ -53,6 +54,8 @@ export const signup = async (req, res) => {
     const email = (req.body?.email || '').trim().toLowerCase();
     const password = req.body?.password || '';
     const phone = (req.body?.phone || '').trim();
+    const role = (req.body?.role || 'viewer').toLowerCase();
+    const activationCode = (req.body?.activationCode || '').trim();
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -70,6 +73,32 @@ export const signup = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Password must contain uppercase, lowercase, and a number' });
     }
 
+    const validRoles = ['viewer', 'accountant', 'admin'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    let finalRole = 'viewer';
+    let activationRecord = null;
+
+    if (role === 'admin' || role === 'accountant') {
+      if (!activationCode) {
+        return res.status(400).json({
+          success: false,
+          message: `Activation code is required for ${role} accounts`,
+        });
+      }
+      const verification = activationCodeService.verify(activationCode, role);
+      if (!verification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: verification.message,
+        });
+      }
+      finalRole = role;
+      activationRecord = verification;
+    }
+
     const existing = await User.findOne({ email }).select('_id');
     if (existing) {
       return res.status(409).json({ success: false, message: 'An account with this email already exists' });
@@ -80,8 +109,10 @@ export const signup = async (req, res) => {
       email,
       password,
       phone: phone || undefined,
-      role: 'viewer',
+      role: finalRole,
       isActive: true,
+      activationCode: activationRecord ? activationRecord.codeHash : undefined,
+      activatedAt: activationRecord ? new Date() : undefined,
     });
 
     user.lastLogin = new Date();

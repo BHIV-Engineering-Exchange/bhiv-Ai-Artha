@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "capability_id": "ARTHA-MITRA-001",
+  "capability_name": "MITRA AI Financial Assistant",
+  "version": "1.0.0",
+  "status": "STABLE",
+  "owner": "Ashmit",
+  "authority_owned": [
+    "Natural language financial query processing",
+    "MITRA API integration and context passing",
+    "Permission-aware AI response generation",
+    "Bank statement conversational analysis",
+    "Financial capability intent resolution",
+    "Role-based capability execution"
+  ],
+  "authority_explicitly_not_owned": [
+    "Journal entry creation (owned by Ledger Engine)",
+    "Invoice lifecycle management (owned by Ledger Engine)",
+    "Expense workflow management (owned by Ledger Engine)",
+    "GST calculation (owned by Signal Engine)",
+    "TDS calculation (owned by Signal Engine)",
+    "User authentication (owned by Auth system)",
+    "Audit event creation (owned by Audit Engine)"
+  ],
+  "description": "MITRA AI Financial Assistant providing natural language access to ARTHA financial capabilities. Translates user intent into ARTHA API operations with full permission enforcement.",
+  "provider_service": "backend/src/services/mitra.service.js",
+  "provider_model": [],
+  "api_endpoints": {
+    "chat": {
+      "method": "POST",
+      "path": "/api/v1/mitra/chat",
+      "description": "Send chat message to MITRA financial assistant",
+      "roles": ["admin", "accountant", "viewer"],
+      "input_schema": { "message": "string" },
+      "output_schema": { "reply": "string", "trace_id": "string" }
+    },
+    "analyze": {
+      "method": "POST",
+      "path": "/api/v1/mitra/analyze",
+      "description": "Run financial analysis query through MITRA",
+      "roles": ["admin", "accountant"],
+      "input_schema": { "query": "string" },
+      "output_schema": { "reply": "string", "trace_id": "string" }
+    },
+    "analyze_statement": {
+      "method": "POST",
+      "path": "/api/v1/mitra/analyze-statement",
+      "description": "Analyze bank statement with MITRA",
+      "roles": ["admin", "accountant"],
+      "input_schema": { "message": "string", "statementId": "string" },
+      "output_schema": { "reply": "string", "trace_id": "string" }
+    },
+    "get_insights": {
+      "method": "GET",
+      "path": "/api/v1/mitra/insights",
+      "description": "Get financial insights from MITRA",
+      "roles": ["admin", "accountant"]
+    },
+    "get_capabilities": {
+      "method": "GET",
+      "path": "/api/v1/mitra/capabilities",
+      "description": "Discover available MITRA capabilities for current role",
+      "roles": ["admin", "accountant", "viewer"]
+    },
+    "health": {
+      "method": "GET",
+      "path": "/api/v1/mitra/health",
+      "description": "MITRA service health check",
+      "roles": ["admin", "accountant", "viewer"]
+    }
+  },
+  "dependencies": ["ARTHA-LEDGER-001", "ARTHA-AUDIT-001", "ARTHA-OBSERVE-001"],
+  "consumers": ["ARTHA"],
+  "replay_method": "deterministic",
+  "failure_behavior": {
+    "description": "MITRA unavailability degrades to direct API access. Chat failures return error message without data exposure.",
+    "fallback": "Direct ARTHA API access"
+  },
+  "auth": {
+    "type": "jwt",
+    "description": "Requires authenticated user with valid JWT. Role-based access enforced per endpoint."
+  },
+  "evidence": {
+    "hash_chain": false,
+    "description": "MITRA interactions recorded in AuditEvent and DecisionLedger via existing governance systems"
+  }
+}

@@ -79,6 +79,7 @@ import multiCompanyRoutes from './routes/multiCompany.routes.js';
 import tantraRoutes from './routes/tantra.routes.js';
 import governanceRoutes from './routes/governance.routes.js';
 import financialRuntimeRoutes from './routes/financialRuntime.routes.js';
+import mitraRoutes from './routes/mitra.routes.js';
 import observabilityService from './services/observability.service.js';
 import bankingService from './services/banking.service.js';
 import auditService from './services/audit.service.js';
@@ -318,6 +319,7 @@ app.use('/api/v1/multi-company', multiCompanyRoutes);
 app.use('/api/v1/tantra', tantraRoutes);
 app.use('/api/v1/governance', governanceRoutes);
 app.use('/api/v1/financial-runtime', financialRuntimeRoutes);
+app.use('/api/v1/mitra', mitraRoutes);
 
 // SETU callback webhook endpoint (delegated to setuDispatch service)
 // Protected by HMAC signature verification for external webhook security

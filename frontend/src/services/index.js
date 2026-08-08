@@ -192,3 +192,13 @@ export const bankStatementService = {
   delete: (id) => api.delete(`/statements/${id}`),
 };
 
+// Mitra AI Services
+export const mitraService = {
+  chat: (message) => api.post('/mitra/chat', { message }),
+  analyze: (query) => api.post('/mitra/analyze', { query }),
+  getInsights: () => api.get('/mitra/insights'),
+  analyzeStatement: (message, statementId) => api.post('/mitra/analyze-statement', { message, statementId }),
+  getCapabilities: () => api.get('/mitra/capabilities'),
+  health: () => api.get('/mitra/health'),
+};
+
