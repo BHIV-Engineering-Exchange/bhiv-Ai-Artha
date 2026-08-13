@@ -5,6 +5,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -19,6 +21,107 @@ import api from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const AUTO_REFRESH_MS = 30000;
+
+const ProvenanceBadge = ({ provenance }) => {
+  if (!provenance) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {provenance.brightConnectionId && (
+        <Badge variant="info" className="text-xs">
+          <ExternalLink className="w-3 h-3 mr-1" />
+          {provenance.brightConnectionId}
+        </Badge>
+      )}
+      {provenance.storeName && (
+        <Badge variant="secondary" className="text-xs">
+          Store: {provenance.storeName}
+        </Badge>
+      )}
+      {provenance.syncedAt && (
+        <Badge variant="outline" className="text-xs">
+          <Clock className="w-3 h-3 mr-1" />
+          Synced: {formatDate(provenance.syncedAt)}
+        </Badge>
+      )}
+      {provenance.migratedToArtha && (
+        <Badge variant="success" className="text-xs">
+          Migrated to ARTHA
+        </Badge>
+      )}
+    </div>
+  );
+};
+
+const ProvenancePanel = ({ title, provenance, rawData }) => {
+  const [expanded, setExpanded] = useState(false);
+  
+  if (!provenance) return null;
+  
+  return (
+    <Card className="p-4 border-blue-200 bg-blue-50">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+          <Info className="w-4 h-4" />
+          {title}
+        </h4>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-blue-600 hover:text-blue-800"
+        >
+          {expanded ? 'Collapse' : 'Show Details'}
+        </button>
+      </div>
+      
+      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        <div>
+          <span className="text-muted-foreground">Connection:</span>
+          <p className="font-medium">{provenance.brightConnectionId || 'N/A'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Account:</span>
+          <p className="font-medium">{provenance.accountId || 'N/A'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Source Entity:</span>
+          <p className="font-medium">{provenance.sourceEntity || 'N/A'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Dataset:</span>
+          <p className="font-medium">{provenance.dataset || 'N/A'}</p>
+        </div>
+        {provenance.storeName && (
+          <div>
+            <span className="text-muted-foreground">Store:</span>
+            <p className="font-medium">{provenance.storeName}</p>
+          </div>
+        )}
+        <div>
+          <span className="text-muted-foreground">Synced At:</span>
+          <p className="font-medium">{formatDate(provenance.syncedAt)}</p>
+        </div>
+        {provenance.syncRunId && (
+          <div>
+            <span className="text-muted-foreground">Sync Run:</span>
+            <p className="font-medium text-xs">{provenance.syncRunId}</p>
+          </div>
+        )}
+        <div>
+          <span className="text-muted-foreground">Migrated:</span>
+          <p className="font-medium">{provenance.migratedToArtha ? 'Yes' : 'No'}</p>
+        </div>
+      </div>
+      
+      {expanded && rawData && (
+        <div className="mt-3 p-2 bg-white rounded border text-xs">
+          <p className="text-muted-foreground mb-1">Raw Tally Payload:</p>
+          <pre className="overflow-auto max-h-40 text-xs">
+            {JSON.stringify(rawData, null, 2)}
+          </pre>
+        </div>
+      )}
+    </Card>
+  );
+};
 
 const TallyConnect = () => {
   const [parties, setParties] = useState([]);
@@ -106,6 +209,21 @@ const TallyConnect = () => {
         </Card>
       )}
 
+      {/* Provenance Panel - Show connection context */}
+      <ProvenancePanel
+        title="Bright Connection Tally Context"
+        provenance={{
+          brightConnectionId: 'bc_bright_connection_001',
+          accountId: 'acct_bright_connection',
+          sourceEntity: 'tally-connector',
+          dataset: 'vouchers, parties, outstanding',
+          syncedAt: syncStatus?.lastRun?.at,
+          syncRunId: syncStatus?.lastRun?.runId || '',
+          migratedToArtha: true,
+        }}
+        rawData={null}
+      />
+
       {/* Sync status */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
@@ -165,6 +283,7 @@ const TallyConnect = () => {
                 <Table.Head>Type</Table.Head>
                 <Table.Head>Closing Balance</Table.Head>
                 <Table.Head>GSTIN</Table.Head>
+                <Table.Head>Provenance</Table.Head>
                 <Table.Head>Fetched</Table.Head>
               </Table.Row>
             </Table.Header>
@@ -177,6 +296,9 @@ const TallyConnect = () => {
                     {formatCurrency(p.closingBalance)}
                   </Table.Cell>
                   <Table.Cell className="text-muted-foreground">{p.gstin || '-'}</Table.Cell>
+                  <Table.Cell>
+                    <ProvenanceBadge provenance={p.provenance} />
+                  </Table.Cell>
                   <Table.Cell className="text-muted-foreground">
                     {formatDate(p.fetchedAt || p.syncedAt)}
                   </Table.Cell>
@@ -216,6 +338,7 @@ const TallyConnect = () => {
                 <Table.Head>Due</Table.Head>
                 <Table.Head>Days Overdue</Table.Head>
                 <Table.Head>Balance</Table.Head>
+                <Table.Head>Provenance</Table.Head>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -234,6 +357,9 @@ const TallyConnect = () => {
                   </Table.Cell>
                   <Table.Cell className="font-semibold">
                     {formatCurrency(o.balance)}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <ProvenanceBadge provenance={o.provenance} />
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -265,6 +391,7 @@ const TallyConnect = () => {
                 <Table.Head>Number</Table.Head>
                 <Table.Head>Party</Table.Head>
                 <Table.Head>Amount</Table.Head>
+                <Table.Head>Provenance</Table.Head>
                 <Table.Head>Reference</Table.Head>
               </Table.Row>
             </Table.Header>
@@ -276,6 +403,9 @@ const TallyConnect = () => {
                   <Table.Cell>{v.voucherNumber || '-'}</Table.Cell>
                   <Table.Cell>{v.partyName || '-'}</Table.Cell>
                   <Table.Cell className="font-semibold">{formatCurrency(v.amount)}</Table.Cell>
+                  <Table.Cell>
+                    <ProvenanceBadge provenance={v.provenance} />
+                  </Table.Cell>
                   <Table.Cell className="text-muted-foreground">{v.reference || '-'}</Table.Cell>
                 </Table.Row>
               ))}

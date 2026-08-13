@@ -11,6 +11,7 @@ import {
   Trash2,
   Send,
   FileText,
+  ExternalLink,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -140,6 +141,7 @@ const InvoiceList = () => {
                 <Table.Head>Customer</Table.Head>
                 <Table.Head>Amount</Table.Head>
                 <Table.Head>Status</Table.Head>
+                <Table.Head>Source</Table.Head>
                 <Table.Head>Due Date</Table.Head>
                 <Table.Head>Created</Table.Head>
                 <Table.Head className="w-20">Actions</Table.Head>
@@ -160,6 +162,16 @@ const InvoiceList = () => {
                     {formatCurrency(invoice.totalAmount)}
                   </Table.Cell>
                   <Table.Cell>{getStatusBadge(invoice.status)}</Table.Cell>
+                  <Table.Cell>
+                    {invoice.source === 'tally-connector' ? (
+                      <Badge variant="info" className="text-xs">
+                        <ExternalLink className="w-3 h-3 mr-1" />
+                        Tally
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="text-xs">{invoice.source || 'manual'}</Badge>
+                    )}
+                  </Table.Cell>
                   <Table.Cell>{formatDate(invoice.dueDate)}</Table.Cell>
                   <Table.Cell className="text-muted-foreground">
                     {formatDate(invoice.createdAt)}

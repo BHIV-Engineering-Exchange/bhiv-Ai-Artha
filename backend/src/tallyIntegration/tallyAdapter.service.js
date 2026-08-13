@@ -3,6 +3,7 @@ import TallyParty from '../models/TallyParty.js';
 import TallyOutstanding from '../models/TallyOutstanding.js';
 import TallyVoucher from '../models/TallyVoucher.js';
 import TallySyncRun from '../models/TallySyncRun.js';
+import { bridgeTallyRecords } from '../services/tallyToArthaBridge.service.js';
 
 /**
  * tallyAdapter.service — ARTHA-side financial normalization.
@@ -24,12 +25,50 @@ function companyName(company) {
   return company || process.env.TALLY_COMPANY || '';
 }
 
-async function upsertParties(records, { company, traceId }) {
+function brightConnectionId() {
+  return process.env.TALLY_BRIGHT_CONNECTION_ID || 'bc_bright_connection_001';
+}
+
+function accountId() {
+  return process.env.TALLY_ACCOUNT_ID || 'acct_bright_connection';
+}
+
+function storeId() {
+  return process.env.TALLY_STORE_ID || '';
+}
+
+function storeName() {
+  return process.env.TALLY_STORE_NAME || '';
+}
+
+function buildProvenance(entityType, dataset, syncRunId, rawPayload) {
+  return {
+    brightConnectionId: brightConnectionId(),
+    accountId: accountId(),
+    storeId: storeId(),
+    storeName: storeName(),
+    sourceEntity: entityType,
+    dataset,
+    rawTallyPayload: rawPayload || null,
+    syncedAt: new Date(),
+    lastSyncedAt: new Date(),
+    syncRunId,
+    migratedToArtha: false,
+    arthaModelType: '',
+    arthaRecordId: '',
+    mitraAction: '',
+    mitraInsight: '',
+  };
+}
+
+async function upsertParties(records, { company, traceId, syncRunId }) {
   let created = 0;
   let updated = 0;
   for (const r of records) {
     const d = r.canonical_data;
     const filter = { tenantId: r.tenant_id, company, ledgerName: d.party_name };
+    const prov = buildProvenance('party', 'parties', syncRunId, r);
+    prov.rawTallyPayload = d;
     const update = {
       $set: {
         company,
@@ -48,6 +87,7 @@ async function upsertParties(records, { company, traceId }) {
         traceId: r.trace_id || traceId,
         rawRef: r.raw_ref,
         syncedAt: new Date(),
+        provenance: prov,
       },
     };
     const res = await TallyParty.updateOne(filter, update, { upsert: true });
@@ -57,7 +97,7 @@ async function upsertParties(records, { company, traceId }) {
   return { created, updated, total: records.length };
 }
 
-async function upsertOutstanding(records, { company, traceId }) {
+async function upsertOutstanding(records, { company, traceId, syncRunId }) {
   let created = 0;
   let updated = 0;
   for (const r of records) {
@@ -68,6 +108,8 @@ async function upsertOutstanding(records, { company, traceId }) {
       partyName: d.party_name,
       billNo: d.bill_no || '',
     };
+    const prov = buildProvenance('outstanding', 'outstanding', syncRunId, r);
+    prov.rawTallyPayload = d;
     const update = {
       $set: {
         company,
@@ -85,6 +127,7 @@ async function upsertOutstanding(records, { company, traceId }) {
         traceId: r.trace_id || traceId,
         rawRef: r.raw_ref,
         syncedAt: new Date(),
+        provenance: prov,
       },
     };
     const res = await TallyOutstanding.updateOne(filter, update, { upsert: true });
@@ -94,7 +137,7 @@ async function upsertOutstanding(records, { company, traceId }) {
   return { created, updated, total: records.length };
 }
 
-async function upsertVouchers(records, { company, traceId }) {
+async function upsertVouchers(records, { company, traceId, syncRunId }) {
   let created = 0;
   let updated = 0;
   for (const r of records) {
@@ -105,6 +148,8 @@ async function upsertVouchers(records, { company, traceId }) {
       voucherNumber: d.voucher_number || '',
       date: d.date ? new Date(d.date) : null,
     };
+    const prov = buildProvenance('voucher', 'vouchers', syncRunId, r);
+    prov.rawTallyPayload = d;
     const update = {
       $set: {
         company,
@@ -122,6 +167,7 @@ async function upsertVouchers(records, { company, traceId }) {
         traceId: r.trace_id || traceId,
         rawRef: r.raw_ref,
         syncedAt: new Date(),
+        provenance: prov,
       },
     };
     const res = await TallyVoucher.updateOne(filter, update, { upsert: true });
@@ -147,6 +193,13 @@ async function runSync({ company, fromDate, toDate } = {}) {
     readOnly: true,
     status: 'running',
     startedAt: new Date(),
+    provenance: {
+      brightConnectionId: brightConnectionId(),
+      accountId: accountId(),
+      storeId: storeId(),
+      storeName: storeName(),
+      datasets: ['parties', 'outstanding', 'vouchers'],
+    },
   });
 
   const stats = {};
@@ -156,19 +209,27 @@ async function runSync({ company, fromDate, toDate } = {}) {
 
   try {
     const parties = await connector.fetchAndNormalize('party', { company: comp, traceId });
-    stats.parties = await upsertParties(parties, { company: comp, traceId });
+    stats.parties = await upsertParties(parties, { company: comp, traceId, syncRunId: run.runId });
     mduCount += parties.length;
     mduRecords.push(...parties);
 
     const outstanding = await connector.fetchAndNormalize('outstanding', { company: comp, traceId });
-    stats.outstanding = await upsertOutstanding(outstanding, { company: comp, traceId });
+    stats.outstanding = await upsertOutstanding(outstanding, { company: comp, traceId, syncRunId: run.runId });
     mduCount += outstanding.length;
     mduRecords.push(...outstanding);
 
     const vouchers = await connector.fetchAndNormalize('voucher', { company: comp, fromDate, toDate, traceId });
-    stats.vouchers = await upsertVouchers(vouchers, { company: comp, traceId });
+    stats.vouchers = await upsertVouchers(vouchers, { company: comp, traceId, syncRunId: run.runId });
     mduCount += vouchers.length;
     mduRecords.push(...vouchers);
+
+    let bridgeResults = null;
+    try {
+      bridgeResults = await bridgeTallyRecords(mduRecords, tenant, comp);
+      stats.bridge = bridgeResults;
+    } catch (bridgeErr) {
+      stats.bridge = { error: bridgeErr.message };
+    }
 
     run.status = 'completed';
     run.completedAt = new Date();

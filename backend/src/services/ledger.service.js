@@ -676,6 +676,7 @@ class LedgerService {
         source,
         trace_id,
         gstDetails,
+        provenance,
       } = entryData;
 
       if (!lines || !Array.isArray(lines) || lines.length < 2) {
@@ -705,6 +706,21 @@ class LedgerService {
         prevHash,
         chainPosition,
         prev_hash: prevHash,
+        provenance: provenance || {
+          brightConnectionId: '',
+          accountId: '',
+          storeId: '',
+          storeName: '',
+          sourceEntity: '',
+          dataset: 'journal_entries',
+          rawTallyPayload: null,
+          syncedAt: null,
+          lastSyncedAt: null,
+          syncRunId: '',
+          tallyVoucherId: '',
+          mitraAction: '',
+          mitraInsight: '',
+        },
       });
 
       const auditRecord = this.buildAuditTraceEntry({

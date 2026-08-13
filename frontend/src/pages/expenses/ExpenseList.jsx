@@ -11,6 +11,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -173,6 +174,7 @@ const ExpenseList = () => {
                 <Table.Head>Vendor</Table.Head>
                 <Table.Head>Amount</Table.Head>
                 <Table.Head>Status</Table.Head>
+                <Table.Head>Source</Table.Head>
                 <Table.Head>Date</Table.Head>
                 <Table.Head>Submitted By</Table.Head>
                 <Table.Head className="w-20">Actions</Table.Head>
@@ -194,6 +196,16 @@ const ExpenseList = () => {
                     {formatCurrency(expense.totalAmount || expense.amount)}
                   </Table.Cell>
                   <Table.Cell>{getStatusBadge(expense.status)}</Table.Cell>
+                  <Table.Cell>
+                    {expense.source === 'tally-connector' ? (
+                      <Badge variant="info" className="text-xs">
+                        <ExternalLink className="w-3 h-3 mr-1" />
+                        Tally
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="text-xs">{expense.source || 'manual'}</Badge>
+                    )}
+                  </Table.Cell>
                   <Table.Cell className="text-muted-foreground">{formatDate(expense.date)}</Table.Cell>
                   <Table.Cell className="text-muted-foreground">
                     {expense.submittedBy?.name || '-'}

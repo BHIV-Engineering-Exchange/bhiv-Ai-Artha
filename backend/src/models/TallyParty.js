@@ -39,6 +39,23 @@ const tallyPartySchema = new mongoose.Schema({
   rawRef: { type: String, default: '' },
   syncedAt: { type: Date, default: Date.now, index: true },
   meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+  provenance: {
+    brightConnectionId: { type: String, default: '' },
+    accountId: { type: String, default: '' },
+    storeId: { type: String, default: '' },
+    storeName: { type: String, default: '' },
+    sourceEntity: { type: String, default: 'party' },
+    dataset: { type: String, default: 'parties' },
+    rawTallyPayload: { type: mongoose.Schema.Types.Mixed, default: null },
+    syncedAt: { type: Date, default: Date.now },
+    lastSyncedAt: { type: Date, default: Date.now },
+    syncRunId: { type: String, default: '' },
+    migratedToArtha: { type: Boolean, default: false },
+    arthaModelType: { type: String, default: '' },
+    arthaRecordId: { type: String, default: '' },
+    mitraAction: { type: String, default: '' },
+    mitraInsight: { type: String, default: '' },
+  },
 }, {
   timestamps: true,
 });

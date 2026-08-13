@@ -118,7 +118,7 @@ const expenseSchema = new mongoose.Schema({
   submittedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: false,
   },
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -127,6 +127,27 @@ const expenseSchema = new mongoose.Schema({
   approvedAt: Date,
   rejectionReason: String,
   notes: String,
+  source: {
+    type: String,
+    enum: ['manual', 'tally-connector', 'upload', 'ocr', 'api'],
+    default: 'manual',
+    index: true,
+  },
+  provenance: {
+    brightConnectionId: { type: String, default: '' },
+    accountId: { type: String, default: '' },
+    storeId: { type: String, default: '' },
+    storeName: { type: String, default: '' },
+    sourceEntity: { type: String, default: '' },
+    dataset: { type: String, default: 'expenses' },
+    rawTallyPayload: { type: mongoose.Schema.Types.Mixed, default: null },
+    syncedAt: { type: Date, default: null },
+    lastSyncedAt: { type: Date, default: null },
+    syncRunId: { type: String, default: '' },
+    tallyVoucherId: { type: String, default: '' },
+    mitraAction: { type: String, default: '' },
+    mitraInsight: { type: String, default: '' },
+  },
 }, {
   timestamps: true,
 });

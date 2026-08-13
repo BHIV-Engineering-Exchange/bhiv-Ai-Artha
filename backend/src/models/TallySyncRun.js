@@ -34,6 +34,15 @@ const tallySyncRunSchema = new mongoose.Schema({
   setuDispatched: { type: Boolean, default: false },
   setuDispatch: { type: mongoose.Schema.Types.Mixed, default: {} },
   evidence: { type: mongoose.Schema.Types.Mixed, default: {} },
+  provenance: {
+    brightConnectionId: { type: String, default: '' },
+    accountId: { type: String, default: '' },
+    storeId: { type: String, default: '' },
+    storeName: { type: String, default: '' },
+    datasets: [{ type: String }],
+    rawPayloadReceived: { type: Number, default: 0 },
+    rawPayloadSize: { type: Number, default: 0 },
+  },
 }, {
   timestamps: true,
 });
