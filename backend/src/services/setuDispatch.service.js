@@ -64,22 +64,24 @@ class SetuDispatchService {
     }
 
     // Stage 2: Create dispatch record
+    // NOTE: SetuDispatch schema uses camelCase fields (signalId, traceId,
+    // dispatchType...). Map the internal snake_case payload to the schema at the
+    // model boundary — strict mode strips snake_case keys and would otherwise
+    // throw a ValidationError for the required camelCase fields.
     const dispatchRecord = await SetuDispatch.create({
-      dispatch_id: pipelineResult.dispatchId,
-      signal_id: rawSignal.signal_id,
-      trace_id: traceId,
-      status: 'pending',
-      pipeline: {
-        normalized: true,
-        validated: true,
-        mapped: true,
-        serialized: true,
-        content_hash: pipelineResult.contentHash,
+      dispatchId: pipelineResult.dispatchId,
+      signalId: rawSignal.signal_id,
+      traceId,
+      dispatchType: 'SIGNAL',
+      attemptNumber: options.attemptNumber || 1,
+      maxAttempts: 3,
+      request: {
+        idempotencyKey: pipelineResult.idempotencyKey,
+        timestamp: new Date(),
       },
-      payload_hash: pipelineResult.contentHash,
-      idempotency_key: pipelineResult.idempotencyKey,
-      attempt_number: options.attemptNumber || 1,
-      created_at: new Date(),
+      deliveryStatus: 'INITIATED',
+      pipelineVersion: '1.0.0',
+      environment: process.env.NODE_ENV,
     });
 
     // Stage 3: Record to provenance chain
@@ -162,8 +164,8 @@ class SetuDispatchService {
       return { success: false, message: 'Missing required fields: dispatch_id, signal_id' };
     }
 
-    // Find dispatch record
-    const dispatch = await SetuDispatch.findOne({ dispatch_id, signal_id });
+    // Find dispatch record (schema uses camelCase field names)
+    const dispatch = await SetuDispatch.findOne({ dispatchId: dispatch_id, signalId: signal_id });
     if (!dispatch) {
       logger.warn(`SETU callback for unknown dispatch: ${dispatch_id}`);
       return { success: false, message: 'Dispatch not found' };
@@ -172,24 +174,17 @@ class SetuDispatchService {
     // Parse acknowledgement
     const ack = parseSetuAcknowledge(callbackBody);
 
-    // Update dispatch record
+    // Update dispatch record (schema fields: ack.setuReference, ack.processingTimeMs,
+    // ack.receivedAt, deliveryStatus)
     await SetuDispatch.findByIdAndUpdate(dispatch._id, {
       $set: {
         'ack.status': status,
-        'ack.setu_reference': setu_reference,
-        'ack.processing_time_ms': processing_time_ms,
+        'ack.setuReference': setu_reference,
+        'ack.processingTimeMs': processing_time_ms,
         'ack.error': error,
-        'ack.received_at': new Date(),
-        status: status === 'ACCEPTED' ? 'dispatched' : 'failed',
-      },
-      $push: {
-        acknowledgement: {
-          status,
-          setu_reference,
-          processing_time_ms,
-          error,
-          received_at: new Date(),
-        },
+        'ack.receivedAt': new Date(),
+        'ack.payload': ack,
+        deliveryStatus: status === 'ACCEPTED' ? 'ACCEPTED' : 'REJECTED',
       },
     });
 

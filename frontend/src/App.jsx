@@ -10,6 +10,7 @@ import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
 
 import FinancialIntelligenceDashboard from './pages/dashboard/FinancialIntelligenceDashboard';
+import TallyConnect from './pages/tally/TallyConnect';
 
 import InvoiceList from './pages/invoices/InvoiceList';
 import InvoiceCreate from './pages/invoices/InvoiceCreate';
@@ -143,6 +144,8 @@ function App() {
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<FinancialIntelligenceDashboard />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          <Route path="/tally" element={<TallyConnect />} />
 
           <Route path="/invoices" element={<InvoiceList />} />
           <Route path="/invoices/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><InvoiceCreate /></RoleProtectedRoute>} />

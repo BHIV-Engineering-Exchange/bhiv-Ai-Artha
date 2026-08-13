@@ -75,6 +75,9 @@ import bankingRoutes from './routes/banking.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import caWorkflowRoutes from './routes/caWorkflow.routes.js';
 import tallyRoutes from './routes/tally.routes.js';
+import tallyConnectorRoutes from './routes/tallyConnector.routes.js';
+import tallyIngestRoutes from './routes/tallyIngest.routes.js';
+import tallySyncScheduler from './services/tallySyncScheduler.service.js';
 import multiCompanyRoutes from './routes/multiCompany.routes.js';
 import tantraRoutes from './routes/tantra.routes.js';
 import governanceRoutes from './routes/governance.routes.js';
@@ -142,6 +145,9 @@ connectDB();
       version: '0.1.0',
     });
 
+    // Automatic Tally → ARTHA sync (new Tally data flows in without manual steps)
+    tallySyncScheduler.start();
+
     logger.info('All services initialized (including BHIV Runtime Bridge)');
   } catch (err) {
     logger.warn('Some services failed to initialize:', err.message);
@@ -173,7 +179,7 @@ app.use((req, res, next) => {
   }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Trace-Id, X-Request-Id');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Trace-Id, X-Request-Id, X-API-Key, X-Signature, X-Content-Hash');
 
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -315,6 +321,8 @@ app.use('/api/v1/banking', bankingRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/ca-workflow', caWorkflowRoutes);
 app.use('/api/v1/tally', tallyRoutes);
+app.use('/api/v1/tally-connect', tallyIngestRoutes);
+app.use('/api/v1/tally-connect', tallyConnectorRoutes);
 app.use('/api/v1/multi-company', multiCompanyRoutes);
 app.use('/api/v1/tantra', tantraRoutes);
 app.use('/api/v1/governance', governanceRoutes);

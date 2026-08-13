@@ -140,7 +140,7 @@ export function policyEnforcement(req, res, next) {
     '/health', '/ready', '/live', '/metrics', '/status',
     '/observability', '/prometheus', '/dashboard',
     '/api/v1/auth', '/test', '/api/test', '/api/health',
-    '/logout',
+    '/logout', '/api/v1/tally-connect/ingest',
   ];
 
   if (PUBLIC_PREFIXES.some(p => path === p || path.startsWith(p + '/'))) {

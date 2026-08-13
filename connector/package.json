@@ -1,0 +1,15 @@
+{
+  "name": "artha-tally-connector",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Secure connector: local Bright Connection Tally → cloud ARTHA",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "once": "node agent.js --once"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0"
+  }
+}

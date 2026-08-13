@@ -20,6 +20,7 @@ import {
   Zap,
   Radio,
   Database,
+  Workflow,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -37,6 +38,11 @@ const menuItems = [
     icon: Database,
     path: '/ingestion',
     roles: ['admin', 'accountant'],
+  },
+  {
+    title: 'Tally Connect',
+    icon: Workflow,
+    path: '/tally',
   },
   {
     title: 'Invoices',

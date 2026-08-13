@@ -43,6 +43,8 @@ export const VALID_SIGNAL_TYPES = [
   'SIG_EXPENSE_RECORD_FAILED',
   'SIG_FILING_NOT_READY',
   'SIG_FILING_GENERATED',
+  'SIG_TALLY_DEALER_SYNCED',
+  'SIG_TALLY_DEALER_OUTSTANDING',
 ];
 
 export const VALID_MODULES = [
@@ -52,6 +54,7 @@ export const VALID_MODULES = [
   'INVOICE',
   'EXPENSE',
   'COMPLIANCE_FILING',
+  'TALLY_CONNECT',
 ];
 
 export const VALID_ENTITY_TYPES = [
@@ -60,6 +63,7 @@ export const VALID_ENTITY_TYPES = [
   'TDS_ENTRY',
   'JOURNAL_ENTRY',
   'COMPLIANCE_FILING',
+  'DEALER_SUMMARY',
 ];
 
 // Fallback: infer module + entity_type from signal type when source fields are missing
@@ -90,6 +94,8 @@ const SIGNAL_TYPE_SOURCE_MAP = {
   SIG_EXPENSE_RECORD_FAILED:     { module: 'EXPENSE',         entity_type: 'EXPENSE' },
   SIG_FILING_NOT_READY:          { module: 'COMPLIANCE_FILING', entity_type: 'COMPLIANCE_FILING' },
   SIG_FILING_GENERATED:          { module: 'COMPLIANCE_FILING', entity_type: 'COMPLIANCE_FILING' },
+  SIG_TALLY_DEALER_SYNCED:       { module: 'TALLY_CONNECT',     entity_type: 'DEALER_SUMMARY' },
+  SIG_TALLY_DEALER_OUTSTANDING:  { module: 'TALLY_CONNECT',     entity_type: 'DEALER_SUMMARY' },
 };
 
 // Trace ID format: TRC-YYYYMMDD-{8 hex chars}

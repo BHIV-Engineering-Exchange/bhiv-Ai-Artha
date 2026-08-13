@@ -259,7 +259,7 @@ export async function authorityEnforcement(req, res, next) {
   // Public endpoints that bypass authority (health, auth)
   const PUBLIC_PREFIXES = ['/health', '/ready', '/live', '/metrics', '/status',
     '/observability', '/prometheus', '/dashboard', '/api/v1/auth', '/test', '/api/test',
-    '/api/health', '/logout'];
+    '/api/health', '/logout', '/api/v1/tally-connect/ingest'];
   if (PUBLIC_PREFIXES.some(p => cleanPath === p || cleanPath.startsWith(p + '/'))) {
     return next();
   }

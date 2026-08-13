@@ -150,26 +150,29 @@ async function dispatchToSetu(payload) {
   const wireBody = JSON.stringify(sampadaBody);
 
   // Create dispatch record
+  // NOTE: SetuDispatch schema uses camelCase fields (signalId, traceId,
+  // dispatchType...). Map the internal snake_case payload to the schema at the
+  // model boundary — strict mode strips snake_case keys and would otherwise
+  // throw a ValidationError for the required camelCase fields.
   const dispatchRecord = await SetuDispatch.create({
-    signal_id: payload.signal_id,
-    trace_id: payload.trace_id,
-    signal_type: payload.signal_id,
-    severity: payload.severity,
-    attempt_number: 1,
-    max_retries: 3,
+    dispatchId: result.dispatchId,
+    signalId: payload.signal_id,
+    traceId: payload.trace_id,
+    dispatchType: 'SIGNAL',
+    attemptNumber: 1,
+    maxAttempts: 3,
     request: {
       endpoint: sampadaEndpoint,
       method: 'POST',
       headers: result.headers,
-      body_hash: result.contentHash,
       body: sampadaBody,
+      bodyHash: result.contentHash,
+      idempotencyKey: result.idempotencyKey,
+      timestamp: new Date(),
     },
-    idempotency_key: result.idempotencyKey,
-    dispatch_id: result.dispatchId,
-    is_retry: false,
-    pipeline_version: '1.0.0',
+    deliveryStatus: 'INITIATED',
+    pipelineVersion: '1.0.0',
     environment: process.env.NODE_ENV,
-    created_by: 'system',
   });
 
   const startTime = Date.now();
@@ -193,7 +196,7 @@ async function dispatchToSetu(payload) {
         'response.status': response.status,
         'response.headers': response.headers,
         'response.body': response.data,
-        'response.latency_ms': latencyMs,
+        'response.latencyMs': latencyMs,
         'response.timestamp': new Date(),
         'ack.status': ack.status,
         'ack.setu_reference': ack.setuReference,
@@ -257,7 +260,7 @@ async function dispatchToSetu(payload) {
       $set: {
         'response.status': err.response?.status,
         'response.body': err.response?.data,
-        'response.latency_ms': latencyMs,
+        'response.latencyMs': latencyMs,
         'response.timestamp': new Date(),
         'response.error': err.message,
         status: 'failed',

@@ -12,6 +12,7 @@
     { "prefix": "/api/v1/reports", "capability": "ARTHA-FINREPORT-001" },
     { "prefix": "/api/v1/multi-company", "capability": "ARTHA-MULTICOMPANY-001" },
     { "prefix": "/api/v1/tally", "capability": "ARTHA-TALLY-001" },
+    { "prefix": "/api/v1/tally-connect", "capability": "ARTHA-LEDGER-001" },
     { "prefix": "/api/v1/runtime", "capability": "ARTHA-OBSERVE-001" },
     { "prefix": "/api/v1/compliance", "capability": "ARTHA-SIGNAL-001" },
     { "prefix": "/api/v1/invoices", "capability": "ARTHA-LEDGER-001" },
