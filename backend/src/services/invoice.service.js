@@ -622,11 +622,11 @@ class InvoiceService {
       const traceId = invoice.trace_id || randomUUID();
 
       if (invoice.status === 'sent') {
-        let arAccount = await ChartOfAccounts.findOne({ code: '1100' }).session(session);
-        let revenueAccount = await ChartOfAccounts.findOne({ code: '4000' }).session(session);
-        let outputCGST = await ChartOfAccounts.findOne({ code: '2311' }).session(session);
-        let outputSGST = await ChartOfAccounts.findOne({ code: '2312' }).session(session);
-        let outputIGST = await ChartOfAccounts.findOne({ code: '2313' }).session(session);
+        const arAccount = await ChartOfAccounts.findOne({ code: '1100' }).session(session);
+        const revenueAccount = await ChartOfAccounts.findOne({ code: '4000' }).session(session);
+        const outputCGST = await ChartOfAccounts.findOne({ code: '2311' }).session(session);
+        const outputSGST = await ChartOfAccounts.findOne({ code: '2312' }).session(session);
+        const outputIGST = await ChartOfAccounts.findOne({ code: '2313' }).session(session);
 
         const totalAmount = new Decimal(invoice.totalAmount || 0);
         const taxableAmount = new Decimal(invoice.subtotal || 0);

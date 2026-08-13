@@ -13,7 +13,7 @@ export const parseMonthPeriod = (period) => {
 };
 
 export const parseFinancialYear = (financialYear) => {
-  let fy = String(financialYear || '').replace(/^FY/i, '');
+  const fy = String(financialYear || '').replace(/^FY/i, '');
   const parts = fy.split('-');
   if (parts.length !== 2) {
     throw new Error('Invalid financial year format. Expected YYYY-YY or FY YYYY-YY');

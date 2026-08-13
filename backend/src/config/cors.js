@@ -43,7 +43,7 @@ export function buildAllowedOrigins({
   }
 
   if (allowLocalhostCors !== false && allowLocalhostCors !== 'false') {
-    for (let port of [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 3000, 8080]) {
+    for (const port of [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 4173, 3000, 8080]) {
       set.add(`http://localhost:${port}`);
       set.add(`http://127.0.0.1:${port}`);
     }

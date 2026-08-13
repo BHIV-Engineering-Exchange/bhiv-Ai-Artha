@@ -3,6 +3,7 @@ import logger from '../config/logger.js';
 import TallyParty from '../models/TallyParty.js';
 import TallyOutstanding from '../models/TallyOutstanding.js';
 import TallyVoucher from '../models/TallyVoucher.js';
+import { bridgeTallyRecords } from '../services/tallyToArthaBridge.service.js';
 import TallySyncRun from '../models/TallySyncRun.js';
 
 /**
@@ -217,6 +218,15 @@ export async function ingest(req, res) {
     errors.push({ syncRun: 'write_failed', error: err.message });
   }
 
+  // Bridge: convert Tally vouchers → JournalEntry, Invoice, Expense
+  let bridgeResults = null;
+  try {
+    bridgeResults = await bridgeTallyRecords(records, tid, company);
+  } catch (err) {
+    logger.error(`[TALLY-INGEST] Bridge error: ${err.message}`);
+    errors.push({ bridge: 'failed', error: err.message });
+  }
+
   const duration = Date.now() - start;
   logger.info(`[TALLY-INGEST] trace=${trace} parties=${counts.parties} outstanding=${counts.outstanding} vouchers=${counts.vouchers} errors=${errors.length} ${duration}ms`);
 
@@ -224,6 +234,7 @@ export async function ingest(req, res) {
     success: true,
     traceId: trace,
     counts,
+    bridge: bridgeResults,
     errors: errors.length > 0 ? errors : undefined,
     duration_ms: duration,
   });
