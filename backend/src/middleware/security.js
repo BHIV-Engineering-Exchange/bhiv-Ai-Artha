@@ -40,7 +40,15 @@ export const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => false,
+  // Skip rate limiting for machine-to-machine endpoints (connector ingest, health checks)
+  skip: (req) => {
+    const path = req.originalUrl || req.path;
+    // Connector ingest is machine-to-machine — must not be rate-limited
+    if (path.startsWith('/api/v1/tally-connect/ingest')) return true;
+    // Health endpoints
+    if (path === '/health' || path === '/ready' || path === '/live') return true;
+    return false;
+  },
 });
 
 function authRateLimitKey(req) {

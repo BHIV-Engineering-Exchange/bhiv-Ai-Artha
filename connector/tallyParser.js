@@ -1,7 +1,10 @@
 /**
  * tallyParser — tolerant Tally XML parser for the connector.
- * Extracts companies, ledgers/parties, outstanding bills, vouchers from
+ * Extracts ledgers/parties, outstanding bills, vouchers from
  * Tally XML responses. No persistence — pure parse functions.
+ *
+ * Handles real Tally XML which may have varying nesting depths,
+ * optional tags, and inline attributes.
  */
 
 function readTag(block, tag) {
@@ -9,8 +12,8 @@ function readTag(block, tag) {
   return m ? m[1].trim() : '';
 }
 
-function readAttr(block, attr) {
-  const m = block.match(new RegExp(`${attr}="([^"]*)"`, 'i'));
+function readAttr(block, tag, attr) {
+  const m = block.match(new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, 'i'));
   return m ? m[1].trim() : '';
 }
 
@@ -33,26 +36,44 @@ function parseAmount(raw) {
   return Number.isFinite(n) ? (neg ? -n : n) : 0;
 }
 
+/**
+ * Extract all blocks of a given tag name from XML.
+ * Handles nested tags correctly by counting open/close pairs.
+ */
 function extractBlocks(xml, tagName) {
-  const regex = new RegExp(`<${tagName}[^>]*>`, 'gi');
+  const openRegex = new RegExp(`<${tagName}(\\s[^>]*)?>`, 'gi');
+  const closeTag = `</${tagName}>`;
   const blocks = [];
   let match;
-  while ((match = regex.exec(xml)) !== null) {
+
+  while ((match = openRegex.exec(xml)) !== null) {
     const start = match.index;
-    const end = xml.indexOf(`</${tagName}>`, start);
-    if (end === -1) continue;
-    blocks.push(xml.slice(start, end + tagName.length + 3));
+    let depth = 1;
+    let pos = match.index + match[0].length;
+
+    while (depth > 0 && pos < xml.length) {
+      const nextOpen = xml.indexOf(`<${tagName}`, pos);
+      const nextClose = xml.indexOf(closeTag, pos);
+
+      if (nextClose === -1) break;
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Check it's actually an opening tag (not self-closing or closing)
+        const afterOpen = xml[nextOpen + tagName.length];
+        if (afterOpen === '>' || afterOpen === ' ' || afterOpen === '\t' || afterOpen === '\n') {
+          depth++;
+        }
+        pos = nextOpen + 1;
+      } else {
+        depth--;
+        if (depth === 0) {
+          blocks.push(xml.slice(start, nextClose + closeTag.length));
+        }
+        pos = nextClose + closeTag.length;
+      }
+    }
   }
   return blocks;
-}
-
-export function parseCompanies(xml) {
-  if (!xml || !xml.trim()) return [];
-  const companies = [];
-  for (const block of extractBlocks(xml, 'COMPANY')) {
-    companies.push({ name: readTag(block, 'COMPANYNAME'), masterId: readTag(block, 'MASTERID') });
-  }
-  return dedupe(companies.filter((c) => c.name), (c) => c.name.toLowerCase());
 }
 
 export function parseLedgers(xml) {
@@ -61,8 +82,8 @@ export function parseLedgers(xml) {
   for (const block of extractBlocks(xml, 'LEDGER')) {
     const gstBlock = extractBlocks(block, 'GSTREGISTRATIONDETAILS')[0] || '';
     ledgers.push({
-      name: readTag(block, 'NAME') || readAttr(block, 'NAME'),
-      guid: readTag(block, 'GUID') || readAttr(block, 'GUID'),
+      name: readTag(block, 'NAME') || readAttr(block, 'LEDGER', 'NAME'),
+      guid: readTag(block, 'GUID') || readAttr(block, 'LEDGER', 'GUID'),
       group: readTag(block, 'PARENT'),
       closingBalance: parseAmount(readTag(block, 'CLOSINGBALANCE')),
       openingBalance: parseAmount(readTag(block, 'OPENINGBALANCE')),
@@ -77,8 +98,13 @@ export function parseLedgers(xml) {
 export function parseOutstanding(xml) {
   if (!xml || !xml.trim()) return [];
   const bills = [];
-  for (const block of extractBlocks(xml, 'BILLALLOCATIONS')) {
-    const parent = block.match(/<PARENT>([^<]*)<\/PARENT>/i);
+
+  // Try extracting BILLALLOCATIONS blocks (standard Tally outstanding)
+  const billBlocks = extractBlocks(xml, 'BILLALLOCATIONS');
+  for (const block of billBlocks) {
+    // The PARENT tag may be in a wrapping LEDGER or ALLLEDGERENTRIES block
+    const parent = block.match(/<PARENT>([^<]*)<\/PARENT>/i)
+      || block.match(/<LEDGERNAME>([^<]*)<\/LEDGERNAME>/i);
     bills.push({
       partyName: parent ? parent[1].trim() : '',
       billName: readTag(block, 'BILLNAME'),
@@ -89,6 +115,25 @@ export function parseOutstanding(xml) {
       billType: readTag(block, 'OBJTYPE') || 'UNKNOWN',
     });
   }
+
+  // Also try LEDGERENTRIES / ALLLEDGERENTRIES blocks for outstanding info
+  if (bills.length === 0) {
+    for (const block of extractBlocks(xml, 'ALLLEDGERENTRIES')) {
+      const billBlock = extractBlocks(block, 'BILLALLOCATIONS')[0];
+      if (!billBlock) continue;
+      const parent = block.match(/<LEDGERNAME>([^<]*)<\/LEDGERNAME>/i);
+      bills.push({
+        partyName: parent ? parent[1].trim() : '',
+        billName: readTag(billBlock, 'BILLNAME'),
+        billDate: readTag(billBlock, 'BILLDATE'),
+        dueDate: readTag(billBlock, 'DUEBILLDATE'),
+        amount: parseAmount(readTag(billBlock, 'AMOUNT')),
+        balance: parseAmount(readTag(billBlock, 'BILLAMOUNT') || readTag(billBlock, 'AMOUNT')),
+        billType: readTag(billBlock, 'OBJTYPE') || 'UNKNOWN',
+      });
+    }
+  }
+
   return bills;
 }
 
@@ -101,11 +146,12 @@ export function parseVouchers(xml) {
       entries.push({
         ledgerName: readTag(entryBlock, 'LEDGERNAME'),
         amount: parseAmount(readTag(entryBlock, 'AMOUNT')),
+        debitCredit: readTag(entryBlock, 'DEBITCREDIT') || undefined,
       });
     }
     const gstBlock = extractBlocks(block, 'GSTITEM')[0] || extractBlocks(block, 'VATITEM')[0] || '';
     vouchers.push({
-      voucherType: readTag(block, 'VOUCHERTYPE'),
+      voucherType: readTag(block, 'VOUCHERTYPE') || readTag(block, 'VOUCHERSTATUS'),
       voucherNumber: readTag(block, 'VOUCHERNUMBER'),
       date: readTag(block, 'DATE'),
       partyName: readTag(block, 'PARTYLEDGERNAME'),
