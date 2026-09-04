@@ -26,7 +26,7 @@ function load() {
       host: process.env.TALLY_HOST,
       port: Number(process.env.TALLY_PORT || 9000),
       company: process.env.TALLY_COMPANY || '',
-      timeoutMs: Number(process.env.TALLY_TIMEOUT_MS || 15000),
+      timeoutMs: Number(process.env.TALLY_TIMEOUT_MS || 60000),
       tenantId: process.env.TALLY_TENANT_ID || 'tenant_bright_connection_001',
     },
     cloud: {

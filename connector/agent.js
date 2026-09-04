@@ -185,27 +185,34 @@ async function syncOnce(config) {
     }
 
     // Step 2: Fetch outstanding (bills receivable/payable)
-    log('info', 'Fetching outstanding...');
-    const outstandingEnvelope = buildEnvelope({
-      headerId: 'Bill wise Details',
-      collectionType: 'Bill wise Details',
-      collectionId: 'Bill wise Details',
-      company,
-    });
-    log('info', `Tally request: Bill wise Details (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
+    // Non-fatal: if Tally times out on large datasets, skip and continue with vouchers
+    let outstanding = [];
+    try {
+      log('info', 'Fetching outstanding...');
+      const outstandingEnvelope = buildEnvelope({
+        headerId: 'Bill wise Details',
+        collectionType: 'Bill wise Details',
+        collectionId: 'Bill wise Details',
+        company,
+      });
+      log('info', `Tally request: Bill wise Details (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
 
-    const outstandingXml = await withRetry(
-      () => tallyFetch(config, outstandingEnvelope),
-      { label: 'Tally outstanding', isTransient: isTransientTallyError },
-    );
-    log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes`);
-    if (outstandingXml.length < 300) {
-      log('warn', `Tally response snippet: ${outstandingXml.substring(0, 300)}`);
-    }
-    const outstanding = parseOutstanding(outstandingXml);
-    log('info', `Parsed: ${outstanding.length} outstanding bills`);
-    if (outstanding.length > 0) {
-      log('info', `  First: ${JSON.stringify(outstanding[0])}`);
+      const outstandingXml = await withRetry(
+        () => tallyFetch(config, outstandingEnvelope),
+        { label: 'Tally outstanding', isTransient: isTransientTallyError, maxRetries: 2 },
+      );
+      log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes`);
+      if (outstandingXml.length < 300) {
+        log('warn', `Tally response snippet: ${outstandingXml.substring(0, 300)}`);
+      }
+      outstanding = parseOutstanding(outstandingXml);
+      log('info', `Parsed: ${outstanding.length} outstanding bills`);
+      if (outstanding.length > 0) {
+        log('info', `  First: ${JSON.stringify(outstanding[0])}`);
+      }
+    } catch (err) {
+      log('warn', `Outstanding fetch failed (non-fatal): ${err.message}`);
+      log('warn', 'Continuing without outstanding data...');
     }
 
     // Step 3: Fetch vouchers
@@ -298,6 +305,13 @@ async function syncOnce(config) {
 
 async function main() {
   const args = process.argv.slice(2);
+
+  // Read-only guard test doesn't need any config or network
+  if (args.includes('--test-readonly')) {
+    const passed = testReadOnlyGuard();
+    process.exit(passed ? 0 : 1);
+  }
+
   const config = loadConfig();
 
   if (args.includes('--status')) {
@@ -309,11 +323,6 @@ async function main() {
     log('info', `  Interval:  ${config.sync.intervalMs / 60000}min`);
     log('info', `  Backfill:  ${config.sync.defaultBackfillDays} days`);
     return;
-  }
-
-  if (args.includes('--test-readonly')) {
-    const passed = testReadOnlyGuard();
-    process.exit(passed ? 0 : 1);
   }
 
   log('info', `Starting connector: Tally=${config.tally.host}:${config.tally.port} → Cloud=${config.cloud.url}`);
