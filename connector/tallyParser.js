@@ -7,7 +7,7 @@
  * which handles real TallyPrime XML responses.
  */
 
-const DR_CR_RE = /^\s*(-?[0-,.]+)\s*(Cr\.?|Dr\.?)?\s*$/i;
+const DR_CR_RE = /^\s*(-?[\d,.]+)\s*(Cr\.?|Dr\.?)?\s*$/i;
 
 export function parseAmount(value) {
   if (value === undefined || value === null || value === '') return 0;
