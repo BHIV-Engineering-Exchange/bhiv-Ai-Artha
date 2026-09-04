@@ -185,7 +185,7 @@ async function syncOnce(config) {
     }
 
     // Step 2: Fetch outstanding (bills receivable/payable)
-    // Non-fatal: if Tally times out on large datasets, skip and continue with vouchers
+    // Non-fatal: collection name may not exist in all Tally versions
     let outstanding = [];
     try {
       log('info', 'Fetching outstanding...');
@@ -197,46 +197,43 @@ async function syncOnce(config) {
       });
       log('info', `Tally request: Bill wise Details (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
 
-      const outstandingXml = await withRetry(
-        () => tallyFetch(config, outstandingEnvelope),
-        { label: 'Tally outstanding', isTransient: isTransientTallyError, maxRetries: 2 },
-      );
+      const outstandingXml = await tallyFetch(config, outstandingEnvelope);
       log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes`);
-      if (outstandingXml.length < 300) {
-        log('warn', `Tally response snippet: ${outstandingXml.substring(0, 300)}`);
-      }
-      outstanding = parseOutstanding(outstandingXml);
-      log('info', `Parsed: ${outstanding.length} outstanding bills`);
-      if (outstanding.length > 0) {
-        log('info', `  First: ${JSON.stringify(outstanding[0])}`);
+      if (outstandingXml.includes('Could not find') || outstandingXml.includes('Error in TDL')) {
+        log('warn', 'Tally returned TDL error for outstanding — collection may not exist. Skipping.');
+      } else {
+        outstanding = parseOutstanding(outstandingXml);
+        log('info', `Parsed: ${outstanding.length} outstanding bills`);
+        if (outstanding.length > 0) log('info', `  First: ${JSON.stringify(outstanding[0])}`);
       }
     } catch (err) {
       log('warn', `Outstanding fetch failed (non-fatal): ${err.message}`);
-      log('warn', 'Continuing without outstanding data...');
     }
 
     // Step 3: Fetch vouchers
-    log('info', 'Fetching vouchers...');
-    const voucherEnvelope = buildEnvelope({
-      headerId: 'Voucher Register',
-      collectionType: 'Voucher',
-      collectionId: 'Voucher',
-      company,
-    });
-    log('info', `Tally request: Voucher Register (${Buffer.byteLength(voucherEnvelope)} bytes)`);
+    // Non-fatal: collection name may not exist in all Tally versions
+    let vouchers = [];
+    try {
+      log('info', 'Fetching vouchers...');
+      const voucherEnvelope = buildEnvelope({
+        headerId: 'Voucher Register',
+        collectionType: 'Voucher',
+        collectionId: 'Voucher',
+        company,
+      });
+      log('info', `Tally request: Voucher Register (${Buffer.byteLength(voucherEnvelope)} bytes)`);
 
-    const voucherXml = await withRetry(
-      () => tallyFetch(config, voucherEnvelope),
-      { label: 'Tally vouchers', isTransient: isTransientTallyError },
-    );
-    log('info', `Tally response: ${Buffer.byteLength(voucherXml)} bytes`);
-    if (voucherXml.length < 300) {
-      log('warn', `Tally response snippet: ${voucherXml.substring(0, 300)}`);
-    }
-    const vouchers = parseVouchers(voucherXml);
-    log('info', `Parsed: ${vouchers.length} vouchers`);
-    if (vouchers.length > 0) {
-      log('info', `  First: ${JSON.stringify(vouchers[0])}`);
+      const voucherXml = await tallyFetch(config, voucherEnvelope);
+      log('info', `Tally response: ${Buffer.byteLength(voucherXml)} bytes`);
+      if (voucherXml.includes('Could not find') || voucherXml.includes('Error in TDL')) {
+        log('warn', 'Tally returned TDL error for vouchers — collection may not exist. Skipping.');
+      } else {
+        vouchers = parseVouchers(voucherXml);
+        log('info', `Parsed: ${vouchers.length} vouchers`);
+        if (vouchers.length > 0) log('info', `  First: ${JSON.stringify(vouchers[0])}`);
+      }
+    } catch (err) {
+      log('warn', `Voucher fetch failed (non-fatal): ${err.message}`);
     }
 
     // Step 4: Normalize to MDU records
