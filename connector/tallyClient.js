@@ -5,24 +5,18 @@ import https from 'node:https';
  * tallyClient — minimal read-only Tally XML gateway client for the connector.
  * Only sends Export requests. No writes.
  *
- * Uses the TYPE=COLLECTION format proven against the live Tally gateway:
- *   <ENVELOPE>
- *     <HEADER>
- *       <VERSION>1</VERSION>
- *       <TALLYREQUEST>EXPORT</TALLYREQUEST>
- *       <TYPE>COLLECTION</TYPE>
- *       <ID>List of Ledgers</ID>
- *     </HEADER>
- *     <BODY>
- *       <SVCURRENTCOMPANY>Company Name</SVCURRENTCOMPANY>
- *       <TALLYMESSAGE xmlns:UDF="TallyUDF">
- *         <COLLECTION>
- *           <TYPE>List of Ledgers</TYPE>
- *           <ID>Ledger</ID>
- *         </COLLECTION>
- *       </TALLYMESSAGE>
- *     </BODY>
- *   </ENVELOPE>
+ * Three envelope formats supported (all proven against TallyPrime XML gateway):
+ *
+ * 1. TYPE=COLLECTION — for master data (ledgers, groups, stock items):
+ *    HEADER: VERSION=1, TALLYREQUEST=EXPORT, TYPE=COLLECTION, ID=<collection name>
+ *
+ * 2. TYPE=Data — for report data (DayBook, Bills Receivable, Bills Payable):
+ *    HEADER: VERSION=1, TALLYREQUEST=Export, TYPE=Data, ID=<report name>
+ *    BODY: DESC > STATICVARIABLES (SVEXPORTFORMAT, SVFROMDATE, SVTODATE)
+ *
+ * 3. EXPORTDATA — alternative report format (Stock Summary):
+ *    HEADER: TALLYREQUEST=Export Data
+ *    BODY: EXPORTDATA > REQUESTDESC > REPORTNAME + STATICVARIABLES
  */
 
 export class TallyError extends Error {
@@ -41,7 +35,7 @@ export class TallyAuthError extends TallyError {
   constructor(msg) { super('TALLY_AUTH_FAILED', msg, 401); }
 }
 
-const EXPORT_REQUESTS = new Set(['Export', 'Export Data', 'EXPORT']);
+const EXPORT_REQUESTS = new Set(['Export', 'Export Data', 'EXPORT', 'export data', 'export']);
 
 export function assertReadOnlyEnvelope(xml) {
   const match = xml.match(/<TALLYREQUEST>\s*([^<]+)\s*<\/TALLYREQUEST>/i);
@@ -55,17 +49,11 @@ export function assertReadOnlyEnvelope(xml) {
 
 /**
  * Build a Tally XML envelope using the TYPE=COLLECTION format.
+ * Used for master data: ledgers, groups, stock items.
  *
- * Proven format (returns real data from live TallyPrime):
+ * Proven format:
  *   HEADER: VERSION=1, TALLYREQUEST=EXPORT, TYPE=COLLECTION, ID=<collection name>
  *   BODY: SVCURRENTCOMPANY + TALLYMESSAGE with COLLECTION
- *
- * @param {Object} opts
- * @param {string} opts.headerId - The collection ID for the HEADER (e.g. "List of Ledgers")
- * @param {string} [opts.collectionType] - COLLECTION TYPE inside TALLYMESSAGE
- * @param {string} [opts.collectionId] - COLLECTION ID inside TALLYMESSAGE
- * @param {string} [opts.company] - Company name for SVCURRENTCOMPANY
- * @returns {string} Valid Tally XML envelope
  */
 export function buildEnvelope({ headerId, collectionType, collectionId, company }) {
   const lines = [
@@ -96,6 +84,90 @@ export function buildEnvelope({ headerId, collectionType, collectionId, company 
 
   lines.push(
     '    </TALLYMESSAGE>',
+    '  </BODY>',
+    '</ENVELOPE>',
+  );
+
+  return lines.join('\n');
+}
+
+/**
+ * Build a Tally XML envelope using the TYPE=Data format.
+ * Used for report data: DayBook (vouchers), Bills Receivable, Bills Payable.
+ *
+ * Format from TallyHelp documentation:
+ *   HEADER: VERSION=1, TALLYREQUEST=Export, TYPE=Data, ID=<report name>
+ *   BODY: DESC > STATICVARIABLES > SVEXPORTFORMAT + SVFROMDATE + SVTODATE
+ *
+ * @param {Object} opts
+ * @param {string} opts.reportId - Report name (e.g. "DayBook", "Bills Receivable", "Bills Payable")
+ * @param {string} [opts.fromDate] - Start date in DD-Mon-YYYY format (e.g. "1-Apr-2024")
+ * @param {string} [opts.toDate] - End date in DD-Mon-YYYY format (e.g. "31-Mar-2025")
+ * @param {string} [opts.company] - Company name for SVCURRENTCOMPANY
+ * @returns {string} Valid Tally XML envelope
+ */
+export function buildDataEnvelope({ reportId, fromDate, toDate, company }) {
+  const lines = [
+    '<ENVELOPE>',
+    '  <HEADER>',
+    '    <VERSION>1</VERSION>',
+    '    <TALLYREQUEST>Export</TALLYREQUEST>',
+    '    <TYPE>Data</TYPE>',
+    `    <ID>${escXml(reportId)}</ID>`,
+    '  </HEADER>',
+    '  <BODY>',
+    '    <DESC>',
+    '      <STATICVARIABLES>',
+    '        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>',
+  ];
+
+  if (fromDate) {
+    lines.push(`        <SVFROMDATE TYPE="Date">${escXml(fromDate)}</SVFROMDATE>`);
+  }
+  if (toDate) {
+    lines.push(`        <SVTODATE TYPE="Date">${escXml(toDate)}</SVTODATE>`);
+  }
+
+  lines.push(
+    '      </STATICVARIABLES>',
+    '    </DESC>',
+    '  </BODY>',
+    '</ENVELOPE>',
+  );
+
+  return lines.join('\n');
+}
+
+/**
+ * Build a Tally XML envelope using the EXPORTDATA format.
+ * Alternative report format used by some Tally reports (e.g. Stock Summary).
+ *
+ * Format:
+ *   HEADER: TALLYREQUEST=Export Data
+ *   BODY: EXPORTDATA > REQUESTDESC > REPORTNAME + STATICVARIABLES
+ */
+export function buildExportDataEnvelope({ reportName, company }) {
+  const lines = [
+    '<ENVELOPE>',
+    '  <HEADER>',
+    '    <TALLYREQUEST>Export Data</TALLYREQUEST>',
+    '  </HEADER>',
+    '  <BODY>',
+    '    <EXPORTDATA>',
+    '      <REQUESTDESC>',
+    '        <STATICVARIABLES>',
+    '          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>',
+  ];
+
+  if (company) {
+    lines.push(`          <SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>`);
+  }
+
+  lines.push(
+    '        </STATICVARIABLES>',
+    `        <REPORTNAME>${escXml(reportName)}</REPORTNAME>`,
+    '      </REQUESTDESC>',
+    '    </EXPORTDATA>',
     '  </BODY>',
     '</ENVELOPE>',
   );

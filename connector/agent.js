@@ -12,7 +12,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import loadConfig from './config.js';
-import { fetchFromTally, buildEnvelope, assertReadOnlyEnvelope, TallyError } from './tallyClient.js';
+import { fetchFromTally, buildEnvelope, buildDataEnvelope, buildExportDataEnvelope, assertReadOnlyEnvelope, TallyError } from './tallyClient.js';
 import { parseLedgers, parseOutstanding, parseVouchers } from './tallyParser.js';
 import { normalizeParties, normalizeOutstanding, normalizeVouchers, buildSyncRun } from './normalizer.js';
 import { pushToCloud, CloudError } from './cloudClient.js';
@@ -79,10 +79,15 @@ function isTransientCloudError(err) {
 function testReadOnlyGuard() {
   log('info', 'Testing read-only guard...');
 
-  // Test 1: Valid EXPORT envelope — should pass
+  // Test 1: Valid EXPORT envelope (COLLECTION format) — should pass
   const exportEnvelope = buildEnvelope({ headerId: 'List of Ledgers', collectionType: 'List of Ledgers', collectionId: 'Ledger', company: 'Test' });
   assertReadOnlyEnvelope(exportEnvelope);
-  log('info', '  PASS: Export envelope accepted');
+  log('info', '  PASS: Collection envelope accepted');
+
+  // Test 1b: Valid Export envelope (Data format) — should pass
+  const dataEnvelope = buildDataEnvelope({ reportId: 'DayBook', fromDate: '1-Apr-2024', toDate: '31-Mar-2025', company: 'Test' });
+  assertReadOnlyEnvelope(dataEnvelope);
+  log('info', '  PASS: Data envelope accepted');
 
   // Test 2: IMPORT write request — should be rejected
   const writeXml = '<ENVELOPE><HEADER><TALLYREQUEST>IMPORT</TALLYREQUEST></HEADER></ENVELOPE>';
@@ -185,48 +190,65 @@ async function syncOnce(config) {
     }
 
     // Step 2: Fetch outstanding (bills receivable/payable)
-    // Non-fatal: collection name may not exist in all Tally versions
+    // Uses TYPE=Data format with report name "Bills Receivable"
     let outstanding = [];
     try {
-      log('info', 'Fetching outstanding...');
-      const outstandingEnvelope = buildEnvelope({
-        headerId: 'Bill wise Details',
-        collectionType: 'Bill wise Details',
-        collectionId: 'Bill wise Details',
+      log('info', 'Fetching outstanding (Bills Receivable)...');
+      const outstandingEnvelope = buildDataEnvelope({
+        reportId: 'Bills Receivable',
+        fromDate: config.sync.fromDate || '1-Apr-2024',
+        toDate: config.sync.toDate || '31-Mar-2025',
         company,
       });
-      log('info', `Tally request: Bill wise Details (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
+      log('info', `Tally request: Bills Receivable (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
 
       const outstandingXml = await tallyFetch(config, outstandingEnvelope);
       log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes`);
       if (outstandingXml.includes('Could not find') || outstandingXml.includes('Error in TDL')) {
-        log('warn', 'Tally returned TDL error for outstanding — collection may not exist. Skipping.');
+        log('warn', 'Tally returned TDL error for Bills Receivable. Trying Bills Payable...');
       } else {
         outstanding = parseOutstanding(outstandingXml);
-        log('info', `Parsed: ${outstanding.length} outstanding bills`);
+        log('info', `Parsed: ${outstanding.length} outstanding bills (receivable)`);
         if (outstanding.length > 0) log('info', `  First: ${JSON.stringify(outstanding[0])}`);
+      }
+
+      // Also fetch Bills Payable if receivable returned nothing
+      if (outstanding.length === 0) {
+        log('info', 'Fetching outstanding (Bills Payable)...');
+        const payableEnvelope = buildDataEnvelope({
+          reportId: 'Bills Payable',
+          fromDate: config.sync.fromDate || '1-Apr-2024',
+          toDate: config.sync.toDate || '31-Mar-2025',
+          company,
+        });
+        const payableXml = await tallyFetch(config, payableEnvelope);
+        if (!payableXml.includes('Could not find') && !payableXml.includes('Error in TDL')) {
+          const payable = parseOutstanding(payableXml);
+          log('info', `Parsed: ${payable.length} outstanding bills (payable)`);
+          outstanding = [...outstanding, ...payable];
+        }
       }
     } catch (err) {
       log('warn', `Outstanding fetch failed (non-fatal): ${err.message}`);
     }
 
-    // Step 3: Fetch vouchers
-    // Non-fatal: collection name may not exist in all Tally versions
+    // Step 3: Fetch vouchers via DayBook
+    // Uses TYPE=Data format with report name "DayBook"
     let vouchers = [];
     try {
-      log('info', 'Fetching vouchers...');
-      const voucherEnvelope = buildEnvelope({
-        headerId: 'Voucher Register',
-        collectionType: 'Voucher',
-        collectionId: 'Voucher',
+      log('info', 'Fetching vouchers (DayBook)...');
+      const voucherEnvelope = buildDataEnvelope({
+        reportId: 'DayBook',
+        fromDate: config.sync.fromDate || '1-Apr-2024',
+        toDate: config.sync.toDate || '31-Mar-2025',
         company,
       });
-      log('info', `Tally request: Voucher Register (${Buffer.byteLength(voucherEnvelope)} bytes)`);
+      log('info', `Tally request: DayBook (${Buffer.byteLength(voucherEnvelope)} bytes)`);
 
       const voucherXml = await tallyFetch(config, voucherEnvelope);
       log('info', `Tally response: ${Buffer.byteLength(voucherXml)} bytes`);
       if (voucherXml.includes('Could not find') || voucherXml.includes('Error in TDL')) {
-        log('warn', 'Tally returned TDL error for vouchers — collection may not exist. Skipping.');
+        log('warn', 'Tally returned TDL error for DayBook. Skipping vouchers.');
       } else {
         vouchers = parseVouchers(voucherXml);
         log('info', `Parsed: ${vouchers.length} vouchers`);

@@ -147,6 +147,13 @@ export function parseLedgers(xml) {
 
 export function parseOutstanding(xml) {
   if (!xml || !xml.trim()) return [];
+
+  // Format 1: DSP-prefixed XML (from TYPE=Data reports like Bills Receivable/Payable)
+  // Structure: <DSPACCNAME><DSPDISPNAME>...</DSPDISPNAME></DSPACCNAME> + <DSPVOUCHER>...</DSPVOUCHER>
+  const dspBills = parseDspOutstanding(xml);
+  if (dspBills.length > 0) return dspBills;
+
+  // Format 2: BILLWISEDETAILS.LIST blocks (from COLLECTION-based responses)
   const out = [];
   const firstLedgerTag = (xml.match(/<LEDGER[^>]*>/) || [''])[0];
   const partyName = readTag(xml, 'PARTYNAME') || readTag(xml, 'LEDGERNAME') || readAttr(firstLedgerTag, 'NAME');
@@ -178,7 +185,7 @@ export function parseOutstanding(xml) {
     return out;
   }
 
-  // Fallback: extract any BILLALLOCATIONS blocks
+  // Format 3: BILLALLOCATIONS blocks
   for (const block of splitBlocks(xml, 'BILLALLOCATIONS')) {
     const parent = block.match(/<PARENT>([^<]*)<\/PARENT>/i)
       || block.match(/<LEDGERNAME>([^<]*)<\/LEDGERNAME>/i);
@@ -196,8 +203,92 @@ export function parseOutstanding(xml) {
   return out;
 }
 
+/**
+ * Parse DSP-prefied outstanding XML from TYPE=Data reports.
+ * Handles Bills Receivable / Bills Payable report format.
+ *
+ * Structure:
+ *   <DSPACCNAME><DSPDISPNAME>Ledger Name</DSPDISPNAME></DSPACCNAME>
+ *   <DSPVOUCHER>
+ *     <DSPVCHDATE>...</DSPVCHDATE>
+ *     <DSPVCHTYPE>...</DSPVCHTYPE>
+ *     <DSPVCHNO>...</DSPVCHNO>
+ *     <DSPAMOUNT>...</DSPAMOUNT>
+ *   </DSPVOUCHER>
+ *
+ * Or simpler flat structure:
+ *   <DSPACCNAME><DSPDISPNAME>Party Name</DSPDISPNAME></DSPACCNAME>
+ *   <DSPDISPNAME>Bill Ref</DSPDISPNAME>
+ *   <DSPAMOUNT>Amount</DSPAMOUNT>
+ */
+function parseDspOutstanding(xml) {
+  const out = [];
+
+  // Try to find DSPACCNAME blocks (each represents a ledger/party with bills)
+  const accBlocks = splitBlocks(xml, 'DSPACCNAME');
+  if (accBlocks.length === 0) return out;
+
+  for (const accBlock of accBlocks) {
+    const partyName = readTag(accBlock, 'DSPDISPNAME') || readTag(accBlock, 'DSPACCNAME') || '';
+
+    // Look for voucher/bill blocks after this DSPACCNAME
+    // They may be in DSPVOUCHER or flat DSPDISPNAME/DSPAMOUNT pairs
+    const vchBlocks = readAll(accBlock, 'DSPVOUCHER');
+    if (vchBlocks.length > 0) {
+      for (const vch of vchBlocks) {
+        out.push({
+          partyName,
+          ledgerName: partyName,
+          billNo: readTag(vch, 'DSPVCHNO') || readTag(vch, 'DSPREF') || '',
+          billDate: parseTallyDate(readTag(vch, 'DSPVCHDATE') || readTag(vch, 'DSPDATE')),
+          dueDate: parseTallyDate(readTag(vch, 'DSPDUEDATE')),
+          daysOverdue: 0,
+          amount: parseAmount(readTag(vch, 'DSPAMOUNT') || readTag(vch, 'DSPCLRAMT')),
+          received: 0,
+          balance: parseAmount(readTag(vch, 'DSPBALANCE') || readTag(vch, 'DSPCLRAMT')),
+          billType: readTag(vch, 'DSPVCHTYPE') || 'Bill',
+          parent: '',
+        });
+      }
+    } else {
+      // Flat structure: look for DSPDISPNAME (bill ref) and DSPAMOUNT pairs
+      const dispNames = readAll(accBlock, 'DSPDISPNAME');
+      const amounts = readAll(accBlock, 'DSPAMOUNT');
+      const balances = readAll(accBlock, 'DSPCLRAMT');
+
+      for (let i = 0; i < Math.max(dispNames.length, amounts.length); i++) {
+        const billRef = readTag(dispNames[i] || '', 'DSPDISPNAME') || '';
+        const amt = parseAmount(readTag(amounts[i] || '', 'DSPAMOUNT') || readTag(balances[i] || '', 'DSPCLRAMT'));
+        if (billRef && amt !== 0) {
+          out.push({
+            partyName,
+            ledgerName: partyName,
+            billNo: billRef,
+            billDate: null,
+            dueDate: null,
+            daysOverdue: 0,
+            amount: Math.abs(amt),
+            received: 0,
+            balance: Math.abs(amt),
+            billType: 'Bill',
+            parent: '',
+          });
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
 export function parseVouchers(xml) {
   if (!xml || !xml.trim()) return [];
+
+  // Format 1: DSP-prefixed XML (from TYPE=Data DayBook report)
+  const dspVouchers = parseDspVouchers(xml);
+  if (dspVouchers.length > 0) return dspVouchers;
+
+  // Format 2: VOUCHER blocks (from TYPE=COLLECTION responses)
   const vouchers = [];
   for (const block of splitBlocks(xml, 'VOUCHER')) {
     const type = readTag(block, 'VOUCHERTYPE') || readAttr(block, 'VCHTYPE') || 'Journal';
@@ -237,5 +328,92 @@ export function parseVouchers(xml) {
       },
     });
   }
+  return vouchers;
+}
+
+/**
+ * Parse DSP-prefixed voucher XML from TYPE=Data DayBook report.
+ *
+ * Structure:
+ *   <DSPACCNAME><DSPDISPNAME>Voucher Type</DSPDISPNAME></DSPACCNAME>
+ *   <DSPACCINFO>
+ *     <DSPVOUCHER>
+ *       <DSPVCHDATE>...</DSPVCHDATE>
+ *       <DSPVCHNO>...</DSPVCHNO>
+ *       <DSPPARTYNAME>...</DSPPARTYNAME>
+ *       <DSPAMOUNT>...</DSPAMOUNT>
+ *       <DSPINVOICETYPE>...</DSPINVOICETYPE>
+ *     </DSPVOUCHER>
+ *   </DSPACCINFO>
+ *
+ * Or flat pairs:
+ *   <DSPACCNAME><DSPDISPNAME>Sales</DSPDISPNAME></DSPACCNAME>
+ *   <DSPACCNAME><DSPDISPNAME>Customer A</DSPDISPNAME></DSPACCNAME>
+ *   <DSPACCINFO><DSPDRAMTA>...</DSPDRAMTA><DSPCRAMTA>...</DSPCRAMTA></DSPACCINFO>
+ */
+function parseDspVouchers(xml) {
+  const vouchers = [];
+
+  // Try to find DSPVOUCHER blocks (structured voucher format)
+  const vchBlocks = splitBlocks(xml, 'DSPVOUCHER');
+  if (vchBlocks.length > 0) {
+    for (const vch of vchBlocks) {
+      const voucherType = readTag(vch, 'DSPVCHTYPE') || readTag(vch, 'DSPINVOICETYPE') || 'Journal';
+      const date = parseTallyDate(readTag(vch, 'DSPVCHDATE') || readTag(vch, 'DSPDATE'));
+      const partyName = readTag(vch, 'DSPPARTYNAME') || readTag(vch, 'DSPACCNAME') || '';
+      const amount = parseAmount(readTag(vch, 'DSPAMOUNT') || readTag(vch, 'DSPDRAMTA'));
+      const voucherNumber = readTag(vch, 'DSPVCHNO') || readTag(vch, 'DSPREF') || '';
+      const narration = readTag(vch, 'DSPNARRATION') || '';
+
+      vouchers.push({
+        voucherType,
+        voucherNumber,
+        date,
+        partyName,
+        partyLedgerName: partyName,
+        amount,
+        narration,
+        reference: readTag(vch, 'DSPREF') || '',
+        entries: [],
+        gstDetails: { gstin: '', taxableValue: 0, cgst: 0, sgst: 0, igst: 0 },
+      });
+    }
+    return vouchers;
+  }
+
+  // Try flat DSPACCNAME + DSPACCINFO pairs
+  const accNames = readAll(xml, 'DSPACCNAME');
+  const accInfos = readAll(xml, 'DSPACCINFO');
+
+  if (accNames.length > 0 && accInfos.length > 0) {
+    // Each DSPACCINFO corresponds to a voucher entry
+    for (let i = 0; i < accInfos.length; i++) {
+      const info = accInfos[i];
+      const vchType = i < accNames.length ? readTag(accNames[i], 'DSPDISPNAME') : 'Journal';
+
+      // Look for sub-elements in the info block
+      const date = parseTallyDate(readTag(info, 'DSPVCHDATE') || readTag(info, 'DSPDATE'));
+      const partyName = readTag(info, 'DSPPARTYNAME') || '';
+      const amount = parseAmount(readTag(info, 'DSPAMOUNT') || readTag(info, 'DSPDRAMTA'));
+      const voucherNumber = readTag(info, 'DSPVCHNO') || readTag(info, 'DSPREF') || '';
+      const narration = readTag(info, 'DSPNARRATION') || '';
+
+      if (amount !== 0 || voucherNumber) {
+        vouchers.push({
+          voucherType: vchType,
+          voucherNumber,
+          date,
+          partyName,
+          partyLedgerName: partyName,
+          amount,
+          narration,
+          reference: readTag(info, 'DSPREF') || '',
+          entries: [],
+          gstDetails: { gstin: '', taxableValue: 0, cgst: 0, sgst: 0, igst: 0 },
+        });
+      }
+    }
+  }
+
   return vouchers;
 }
