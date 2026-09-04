@@ -3,29 +3,24 @@ import https from 'node:https';
 
 /**
  * tallyClient — minimal read-only Tally XML gateway client for the connector.
- * Only sends Export Data envelopes. No writes. No Tally-specific logic leaks out.
+ * Only sends Export requests. No writes.
  *
- * Envelope format (proven against live TallyPrime):
+ * Uses the TYPE=COLLECTION format proven against the live Tally gateway:
  *   <ENVELOPE>
- *     <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export Data</TALLYREQUEST><TYPE>Data</TYPE></HEADER>
+ *     <HEADER>
+ *       <VERSION>1</VERSION>
+ *       <TALLYREQUEST>EXPORT</TALLYREQUEST>
+ *       <TYPE>COLLECTION</TYPE>
+ *       <ID>List of Ledgers</ID>
+ *     </HEADER>
  *     <BODY>
- *       <EXPORTDATA>
- *         <REQUESTDESC>
- *           <REPORTNAME>...</REPORTNAME>
- *           <STATICVARIABLES>
- *             <SVCURRENTCOMPANY>Company Name</SVCURRENTCOMPANY>
- *           </STATICVARIABLES>
- *         </REQUESTDESC>
- *         <REQUESTDATA>
- *           <TALLYMESSAGE xmlns:UDF="TallyUDF">
- *             <COLLECTION>
- *               <NAME>...</NAME>
- *               <TYPE>...</TYPE>
- *               <FETCH>ALL</FETCH>
- *             </COLLECTION>
- *           </TALLYMESSAGE>
- *         </REQUESTDATA>
- *       </EXPORTDATA>
+ *       <SVCURRENTCOMPANY>Company Name</SVCURRENTCOMPANY>
+ *       <TALLYMESSAGE xmlns:UDF="TallyUDF">
+ *         <COLLECTION>
+ *           <TYPE>List of Ledgers</TYPE>
+ *           <ID>Ledger</ID>
+ *         </COLLECTION>
+ *       </TALLYMESSAGE>
  *     </BODY>
  *   </ENVELOPE>
  */
@@ -46,7 +41,7 @@ export class TallyAuthError extends TallyError {
   constructor(msg) { super('TALLY_AUTH_FAILED', msg, 401); }
 }
 
-const EXPORT_REQUESTS = new Set(['Export Data', 'Export']);
+const EXPORT_REQUESTS = new Set(['Export', 'Export Data', 'EXPORT']);
 
 export function assertReadOnlyEnvelope(xml) {
   const match = xml.match(/<TALLYREQUEST>\s*([^<]+)\s*<\/TALLYREQUEST>/i);
@@ -59,63 +54,63 @@ export function assertReadOnlyEnvelope(xml) {
 }
 
 /**
- * Build a standard Tally XML Export Data envelope.
+ * Build a Tally XML envelope using the TYPE=COLLECTION format.
  *
- * Matches the proven format from the review packet:
- * HEADER → EXPORTDATA → REQUESTDESC (with STATICVARIABLES) → REQUESTDATA (with TALLYMESSAGE/COLLECTION)
+ * Proven format (returns real data from live TallyPrime):
+ *   HEADER: VERSION=1, TALLYREQUEST=EXPORT, TYPE=COLLECTION, ID=<collection name>
+ *   BODY: SVCURRENTCOMPANY + TALLYMESSAGE with COLLECTION
  *
  * @param {Object} opts
- * @param {string} opts.requestName - Tally report name (e.g. "List of Companies", "Ledger", "Statement of Accounts", "Voucher Register")
- * @param {string} [opts.collectionType] - Tally collection type (e.g. "List of Ledgers", "Bill wise Details")
- * @param {string} [opts.collectionName] - Tally collection name (e.g. "Ledger", "Voucher")
- * @param {string} [opts.fetch] - What to fetch (default: "ALL")
+ * @param {string} opts.headerId - The collection ID for the HEADER (e.g. "List of Ledgers")
+ * @param {string} [opts.collectionType] - COLLECTION TYPE inside TALLYMESSAGE
+ * @param {string} [opts.collectionId] - COLLECTION ID inside TALLYMESSAGE
  * @param {string} [opts.company] - Company name for SVCURRENTCOMPANY
  * @returns {string} Valid Tally XML envelope
  */
-export function buildEnvelope({ requestName, collectionType = null, collectionName = null, fetch = 'ALL', company = '' }) {
+export function buildEnvelope({ headerId, collectionType, collectionId, company }) {
   const lines = [
     '<ENVELOPE>',
     '  <HEADER>',
     '    <VERSION>1</VERSION>',
-    '    <TALLYREQUEST>Export Data</TALLYREQUEST>',
-    '    <TYPE>Data</TYPE>',
+    '    <TALLYREQUEST>EXPORT</TALLYREQUEST>',
+    '    <TYPE>COLLECTION</TYPE>',
+    `    <ID>${escXml(headerId)}</ID>`,
     '  </HEADER>',
     '  <BODY>',
-    '    <EXPORTDATA>',
-    '      <REQUESTDESC>',
-    `        <REPORTNAME>${escXml(requestName)}</REPORTNAME>`,
-    '        <STATICVARIABLES>',
-    company ? `          <SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>` : '',
-    '        </STATICVARIABLES>',
-    '      </REQUESTDESC>',
   ];
 
+  if (company) {
+    lines.push(`    <SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>`);
+  }
+
+  lines.push('    <TALLYMESSAGE xmlns:UDF="TallyUDF">');
+
   if (collectionType) {
-    lines.push(
-      '      <REQUESTDATA>',
-      '        <TALLYMESSAGE xmlns:UDF="TallyUDF">',
-      '          <COLLECTION>',
-      collectionName ? `            <NAME>${escXml(collectionName)}</NAME>` : '',
-      `            <TYPE>${escXml(collectionType)}</TYPE>`,
-      `            <FETCH>${escXml(fetch)}</FETCH>`,
-      '          </COLLECTION>',
-      '        </TALLYMESSAGE>',
-      '      </REQUESTDATA>',
-    );
+    lines.push('      <COLLECTION>');
+    lines.push(`        <TYPE>${escXml(collectionType)}</TYPE>`);
+    if (collectionId) {
+      lines.push(`        <ID>${escXml(collectionId)}</ID>`);
+    }
+    lines.push('      </COLLECTION>');
   }
 
   lines.push(
-    '    </EXPORTDATA>',
+    '    </TALLYMESSAGE>',
     '  </BODY>',
     '</ENVELOPE>',
   );
 
-  return lines.filter(l => l !== undefined && l !== null).join('\n');
+  return lines.join('\n');
 }
 
 /** Escape XML special characters. */
 function escXml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 export async function fetchFromTally({ protocol, host, port, envelope, timeoutMs = 15000, username, password }) {
