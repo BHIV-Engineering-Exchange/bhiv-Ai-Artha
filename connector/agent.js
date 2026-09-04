@@ -79,10 +79,10 @@ function isTransientCloudError(err) {
 function testReadOnlyGuard() {
   log('info', 'Testing read-only guard...');
 
-  // Test 1: Valid EXPORT envelope — should pass
-  const exportEnvelope = buildEnvelope({ collectionType: 'List of Ledgers', company: 'Test' });
+  // Test 1: Valid Export Data envelope — should pass
+  const exportEnvelope = buildEnvelope({ requestName: 'Ledger', collectionType: 'List of Ledgers', collectionName: 'Ledger', company: 'Test' });
   assertReadOnlyEnvelope(exportEnvelope);
-  log('info', '  PASS: Export envelope accepted');
+  log('info', '  PASS: Export Data envelope accepted');
 
   // Test 2: IMPORT write request — should be rejected
   const writeXml = '<ENVELOPE><HEADER><TALLYREQUEST>IMPORT</TALLYREQUEST></HEADER></ENVELOPE>';
@@ -163,50 +163,71 @@ async function syncOnce(config) {
     // Step 1: Fetch ledgers (parties)
     log('info', 'Fetching ledgers...');
     const ledgerEnvelope = buildEnvelope({
+      requestName: 'Ledger',
       collectionType: 'List of Ledgers',
-      collectionId: 'Ledger',
+      collectionName: 'Ledger',
+      fetch: 'ALL',
       company,
     });
-    log('info', `Tally request: List of Ledgers (${Buffer.byteLength(ledgerEnvelope)} bytes)`);
+    log('info', `Tally request: Ledger → List of Ledgers (${Buffer.byteLength(ledgerEnvelope)} bytes)`);
 
     const ledgerXml = await withRetry(
       () => tallyFetch(config, ledgerEnvelope),
       { label: 'Tally ledgers', isTransient: isTransientTallyError },
     );
+    const ledgerSnippet = ledgerXml.substring(0, 500);
+    log('info', `Tally response: ${Buffer.byteLength(ledgerXml)} bytes, snippet: ${ledgerSnippet.substring(0, 200)}...`);
     const ledgers = parseLedgers(ledgerXml);
     log('info', `Tally response: parsed ${ledgers.length} ledgers`);
+    if (ledgers.length > 0) {
+      log('info', `  First ledger: ${JSON.stringify(ledgers[0])}`);
+    }
 
     // Step 2: Fetch outstanding (bills receivable/payable)
     log('info', 'Fetching outstanding...');
     const outstandingEnvelope = buildEnvelope({
-      collectionType: 'List of Ledger Vouchers',
-      collectionId: 'Ledger',
+      requestName: 'Statement of Accounts',
+      collectionType: 'Bill wise Details',
+      collectionName: 'Bill wise Details',
+      fetch: 'ALL',
       company,
     });
-    log('info', `Tally request: List of Ledger Vouchers (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
+    log('info', `Tally request: Statement of Accounts → Bill wise Details (${Buffer.byteLength(outstandingEnvelope)} bytes)`);
 
     const outstandingXml = await withRetry(
       () => tallyFetch(config, outstandingEnvelope),
       { label: 'Tally outstanding', isTransient: isTransientTallyError },
     );
+    const outstandingSnippet = outstandingXml.substring(0, 500);
+    log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes, snippet: ${outstandingSnippet.substring(0, 200)}...`);
     const outstanding = parseOutstanding(outstandingXml);
     log('info', `Tally response: parsed ${outstanding.length} outstanding bills`);
+    if (outstanding.length > 0) {
+      log('info', `  First bill: ${JSON.stringify(outstanding[0])}`);
+    }
 
     // Step 3: Fetch vouchers
     log('info', 'Fetching vouchers...');
     const voucherEnvelope = buildEnvelope({
-      collectionType: 'Voucher Register',
-      collectionId: 'Voucher',
+      requestName: 'Voucher Register',
+      collectionType: 'Voucher',
+      collectionName: 'Voucher',
+      fetch: 'ALL',
       company,
     });
-    log('info', `Tally request: Voucher Register (${Buffer.byteLength(voucherEnvelope)} bytes)`);
+    log('info', `Tally request: Voucher Register → Voucher (${Buffer.byteLength(voucherEnvelope)} bytes)`);
 
     const voucherXml = await withRetry(
       () => tallyFetch(config, voucherEnvelope),
       { label: 'Tally vouchers', isTransient: isTransientTallyError },
     );
+    const voucherSnippet = voucherXml.substring(0, 500);
+    log('info', `Tally response: ${Buffer.byteLength(voucherXml)} bytes, snippet: ${voucherSnippet.substring(0, 200)}...`);
     const vouchers = parseVouchers(voucherXml);
     log('info', `Tally response: parsed ${vouchers.length} vouchers`);
+    if (vouchers.length > 0) {
+      log('info', `  First voucher: ${JSON.stringify(vouchers[0])}`);
+    }
 
     // Step 4: Normalize to MDU records
     const opts = { tenantId: config.tenantId, company };
@@ -222,6 +243,7 @@ async function syncOnce(config) {
       log('warn', 'WARNING: Zero records fetched. Check Tally gateway connectivity and company name.');
       log('warn', `Verify: Tally is running at ${config.tally.protocol}://${config.tally.host}:${config.tally.port}`);
       log('warn', `Verify: Company "${company}" exists in Tally`);
+      log('warn', 'Tip: Use --verbose to see raw Tally XML responses');
     }
 
     // Step 5: Push to cloud ARTHA

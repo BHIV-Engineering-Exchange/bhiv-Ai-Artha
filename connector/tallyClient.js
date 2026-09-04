@@ -3,24 +3,29 @@ import https from 'node:https';
 
 /**
  * tallyClient — minimal read-only Tally XML gateway client for the connector.
- * Only sends Export requests. No writes. No Tally-specific logic leaks out.
+ * Only sends Export Data envelopes. No writes. No Tally-specific logic leaks out.
  *
- * Uses the standard Tally XML EXPORT format:
+ * Envelope format (proven against live TallyPrime):
  *   <ENVELOPE>
- *     <HEADER>
- *       <VERSION>1</VERSION>
- *       <TALLYREQUEST>EXPORT</TALLYREQUEST>
- *       <TYPE>COLLECTION</TYPE>
- *       <ID>...</ID>
- *     </HEADER>
+ *     <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export Data</TALLYREQUEST><TYPE>Data</TYPE></HEADER>
  *     <BODY>
- *       <SVCURRENTCOMPANY>Company Name</SVCURRENTCOMPANY>
- *       <TALLYMESSAGE xmlns:UDF="TallyUDF">
- *         <COLLECTION>
- *           <TYPE>...</TYPE>
- *           <ID>...</ID>
- *         </COLLECTION>
- *       </TALLYMESSAGE>
+ *       <EXPORTDATA>
+ *         <REQUESTDESC>
+ *           <REPORTNAME>...</REPORTNAME>
+ *           <STATICVARIABLES>
+ *             <SVCURRENTCOMPANY>Company Name</SVCURRENTCOMPANY>
+ *           </STATICVARIABLES>
+ *         </REQUESTDESC>
+ *         <REQUESTDATA>
+ *           <TALLYMESSAGE xmlns:UDF="TallyUDF">
+ *             <COLLECTION>
+ *               <NAME>...</NAME>
+ *               <TYPE>...</TYPE>
+ *               <FETCH>ALL</FETCH>
+ *             </COLLECTION>
+ *           </TALLYMESSAGE>
+ *         </REQUESTDATA>
+ *       </EXPORTDATA>
  *     </BODY>
  *   </ENVELOPE>
  */
@@ -41,7 +46,7 @@ export class TallyAuthError extends TallyError {
   constructor(msg) { super('TALLY_AUTH_FAILED', msg, 401); }
 }
 
-const EXPORT_REQUESTS = new Set(['Export', 'Export Data', 'EXPORT']);
+const EXPORT_REQUESTS = new Set(['Export Data', 'Export']);
 
 export function assertReadOnlyEnvelope(xml) {
   const match = xml.match(/<TALLYREQUEST>\s*([^<]+)\s*<\/TALLYREQUEST>/i);
@@ -54,31 +59,58 @@ export function assertReadOnlyEnvelope(xml) {
 }
 
 /**
- * Build a standard Tally XML EXPORT envelope for a COLLECTION request.
+ * Build a standard Tally XML Export Data envelope.
+ *
+ * Matches the proven format from the review packet:
+ * HEADER → EXPORTDATA → REQUESTDESC (with STATICVARIABLES) → REQUESTDATA (with TALLYMESSAGE/COLLECTION)
  *
  * @param {Object} opts
- * @param {string} opts.collectionType - Tally collection type (e.g. "List of Ledgers", "Voucher Register")
- * @param {string} [opts.collectionId] - Tally collection ID (e.g. "Ledger", "Voucher")
- * @param {string} [opts.company] - Company name (passed via SVCURRENTCOMPANY)
- * @param {Object} [opts.filters] - Optional filter parameters inside COLLECTION
+ * @param {string} opts.requestName - Tally report name (e.g. "List of Companies", "Ledger", "Statement of Accounts", "Voucher Register")
+ * @param {string} [opts.collectionType] - Tally collection type (e.g. "List of Ledgers", "Bill wise Details")
+ * @param {string} [opts.collectionName] - Tally collection name (e.g. "Ledger", "Voucher")
+ * @param {string} [opts.fetch] - What to fetch (default: "ALL")
+ * @param {string} [opts.company] - Company name for SVCURRENTCOMPANY
  * @returns {string} Valid Tally XML envelope
  */
-export function buildEnvelope({ collectionType, collectionId, company, filters }) {
-  let collectionXml = `<COLLECTION>`;
-  collectionXml += `<TYPE>${escXml(collectionType)}</TYPE>`;
-  if (collectionId) {
-    collectionXml += `<ID>${escXml(collectionId)}</ID>`;
-  }
-  if (filters) {
-    for (const [k, v] of Object.entries(filters)) {
-      collectionXml += `<${k}>${escXml(String(v))}</${k}>`;
-    }
-  }
-  collectionXml += `</COLLECTION>`;
+export function buildEnvelope({ requestName, collectionType = null, collectionName = null, fetch = 'ALL', company = '' }) {
+  const lines = [
+    '<ENVELOPE>',
+    '  <HEADER>',
+    '    <VERSION>1</VERSION>',
+    '    <TALLYREQUEST>Export Data</TALLYREQUEST>',
+    '    <TYPE>Data</TYPE>',
+    '  </HEADER>',
+    '  <BODY>',
+    '    <EXPORTDATA>',
+    '      <REQUESTDESC>',
+    `        <REPORTNAME>${escXml(requestName)}</REPORTNAME>`,
+    '        <STATICVARIABLES>',
+    company ? `          <SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>` : '',
+    '        </STATICVARIABLES>',
+    '      </REQUESTDESC>',
+  ];
 
-  const companyXml = company ? `<SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>` : '';
+  if (collectionType) {
+    lines.push(
+      '      <REQUESTDATA>',
+      '        <TALLYMESSAGE xmlns:UDF="TallyUDF">',
+      '          <COLLECTION>',
+      collectionName ? `            <NAME>${escXml(collectionName)}</NAME>` : '',
+      `            <TYPE>${escXml(collectionType)}</TYPE>`,
+      `            <FETCH>${escXml(fetch)}</FETCH>`,
+      '          </COLLECTION>',
+      '        </TALLYMESSAGE>',
+      '      </REQUESTDATA>',
+    );
+  }
 
-  return `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>EXPORT</TALLYREQUEST><TYPE>COLLECTION</TYPE><ID>List of Accounts</ID></HEADER><BODY>${companyXml}<TALLYMESSAGE xmlns:UDF="TallyUDF">${collectionXml}</TALLYMESSAGE></BODY></ENVELOPE>`;
+  lines.push(
+    '    </EXPORTDATA>',
+    '  </BODY>',
+    '</ENVELOPE>',
+  );
+
+  return lines.filter(l => l !== undefined && l !== null).join('\n');
 }
 
 /** Escape XML special characters. */
@@ -92,7 +124,10 @@ export async function fetchFromTally({ protocol, host, port, envelope, timeoutMs
 
   return new Promise((resolve, reject) => {
     const mod = protocol === 'https' ? https : http;
-    const headers = { 'Content-Type': 'text/xml' };
+    const headers = {
+      'Content-Type': 'text/xml',
+      'Content-Length': Buffer.byteLength(envelope),
+    };
     if (username) {
       headers['Authorization'] = 'Basic ' + Buffer.from(`${username}:${password || ''}`).toString('base64');
     }
@@ -102,9 +137,10 @@ export async function fetchFromTally({ protocol, host, port, envelope, timeoutMs
       headers,
       timeout: timeoutMs,
     }, (res) => {
-      let body = '';
-      res.on('data', (c) => { body += c; });
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
         if (res.statusCode === 401) return reject(new TallyAuthError('Authentication failed.'));
         if (res.statusCode !== 200) return reject(new TallyUnavailableError('TALLY_HTTP_ERROR', `HTTP ${res.statusCode}`));
         resolve(body);
