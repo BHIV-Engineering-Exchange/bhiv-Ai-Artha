@@ -1,0 +1,13 @@
+{
+  "task_id": "tally-bright-connection-001",
+  "connector": "tally",
+  "read_only": true,
+  "status": "scaffold-complete-pending-live-gateway",
+  "tests": {
+    "suite": "tallyConnector.test.js",
+    "count": 15,
+    "result": "PASS"
+  },
+  "created": "2026-08-13T07:44:38.181Z",
+  "note": "Real-data proof pending network path to 192.168.0.72:9000. See screenshots/README.md."
+}

@@ -1,0 +1,68 @@
+﻿node.exe : [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline 
+data, please update: `npm i baseline-browser-mapping@latest -D`
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Ashmit Pandey\AppData\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([baseline-brows...ping@latest -D`:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please 
+update: `npm i baseline-browser-mapping@latest -D`
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please 
+update: `npm i baseline-browser-mapping@latest -D`
+(node:7984) [MONGOOSE] Warning: `errors` is a reserved schema pathname and may break some functionality. You are 
+allowed to use it, but use at your own risk. To disable this warning pass `suppressReservedKeysWarning` as a schema 
+option.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS tests/tallySyncScheduler.test.js
+  ΓùÅ Console
+
+    console.log
+      [32minfo[39m: [TALLY_SYNC] scheduler disabled (TALLY_ENABLED or TALLY_SYNC_ENABLED). 
+{"service":"artha-backend","timestamp":"2026-08-13 13:14:42"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/setuDispatchBoundary.test.js
+  ΓùÅ Console
+
+    console.log
+      [33mwarn[39m: SETU pipeline warnings for SIG_TALLY_DEALER_OUTSTANDING: trace_id "boundary-trace-001" does not 
+match TRC-YYYYMMDD-{8hex} format (non-blocking) {"service":"artha-backend","timestamp":"2026-08-13 13:14:42"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [32minfo[39m: Signal dispatched and acknowledged: SIG_TALLY_DEALER_OUTSTANDING trace=boundary-trace-001 
+setu_ref=dealer:Sunrise Distributors {"service":"artha-backend","timestamp":"2026-08-13 13:14:42"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [33mwarn[39m: SETU pipeline warnings for SIG_TALLY_DEALER_SYNCED: trace_id "boundary-trace-002" does not match 
+TRC-YYYYMMDD-{8hex} format (non-blocking) {"service":"artha-backend","timestamp":"2026-08-13 13:14:42"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [32minfo[39m: Signal dispatched and acknowledged: SIG_TALLY_DEALER_SYNCED trace=boundary-trace-002 
+setu_ref=dealer:Sunrise Distributors {"service":"artha-backend","timestamp":"2026-08-13 13:14:42"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+(node:23364) [MONGOOSE] Warning: Duplicate schema index on {"dispatch_status":1} found. This is often due to declaring 
+an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23364) [MONGOOSE] Warning: `errors` is a reserved schema pathname and may break some functionality. You are 
+allowed to use it, but use at your own risk. To disable this warning pass `suppressReservedKeysWarning` as a schema 
+option.
+PASS tests/tallyConnector.test.js
+
+Test Suites: 3 passed, 3 total
+Tests:       26 passed, 26 total
+Snapshots:   0 total
+Time:        2.678 s, estimated 3 s
+Ran all test suites matching 
+/tests\\tallyConnector.test.js|tests\\setuDispatchBoundary.test.js|tests\\tallySyncScheduler.test.js/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after 
+all tests finished?
