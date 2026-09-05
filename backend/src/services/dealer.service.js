@@ -1,0 +1,205 @@
+import Dealer from '../models/Dealer.js';
+import TallyParty from '../models/TallyParty.js';
+import TallyOutstanding from '../models/TallyOutstanding.js';
+import TallyVoucher from '../models/TallyVoucher.js';
+import logger from '../config/logger.js';
+
+class DealerService {
+  async createDealer(data) {
+    if (!data.dealerCode) {
+      const count = await Dealer.countDocuments();
+      data.dealerCode = `DLR-${String(count + 1).padStart(5, '0')}`;
+    }
+    return Dealer.create(data);
+  }
+
+  async getDealers({ page = 1, limit = 20, search, region, city, isActive, assignedAgent, sort = '-createdAt' } = {}) {
+    const query = {};
+    if (search) query.$text = { $search: search };
+    if (region) query.region = region;
+    if (city) query.city = city;
+    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (assignedAgent) query.assignedAgent = assignedAgent;
+
+    const total = await Dealer.countDocuments(query);
+    const dealers = await Dealer.find(query)
+      .populate('assignedAgent', 'name region area')
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    return {
+      dealers,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
+  }
+
+  async getDealerById(id) {
+    return Dealer.findById(id)
+      .populate('assignedAgent', 'name region area phone')
+      .lean();
+  }
+
+  async updateDealer(id, data) {
+    return Dealer.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+  }
+
+  async deleteDealer(id) {
+    return Dealer.findByIdAndUpdate(id, { isActive: false }, { new: true });
+  }
+
+  async getDealerSummary(id) {
+    const dealer = await Dealer.findById(id).lean();
+    if (!dealer) throw new Error('Dealer not found');
+
+    const outstanding = await TallyOutstanding.find({
+      $or: [
+        { partyName: dealer.name },
+        { ledgerName: dealer.name },
+      ],
+    }).lean();
+
+    const recentVouchers = await TallyVoucher.find({
+      $or: [
+        { partyName: dealer.name },
+        { partyLedgerName: dealer.name },
+      ],
+    }).sort({ date: -1 }).limit(10).lean();
+
+    const overdueBills = outstanding.filter(b => {
+      if (!b.dueDate) return false;
+      return new Date(b.dueDate) < new Date();
+    });
+
+    return {
+      dealer,
+      outstanding: {
+        total: outstanding.reduce((s, b) => s + (b.balance || b.amount || 0), 0),
+        bills: outstanding,
+        overdueCount: overdueBills.length,
+        overdueAmount: overdueBills.reduce((s, b) => s + (b.balance || b.amount || 0), 0),
+      },
+      recentVouchers,
+      stats: {
+        totalBills: outstanding.length,
+        overdueBills: overdueBills.length,
+        lastBillingDate: recentVouchers.length > 0 ? recentVouchers[0].date : null,
+        lastPaymentDate: recentVouchers.find(v => v.voucherType === 'Receipt')?.date || null,
+      },
+    };
+  }
+
+  async syncFromTally() {
+    const tallyParties = await TallyParty.find({
+      $or: [
+        { group: 'Sundry Debtors' },
+        { parent: 'Sundry Debtors' },
+      ],
+    }).lean();
+
+    let created = 0;
+    let updated = 0;
+
+    for (const party of tallyParties) {
+      const existing = await Dealer.findOne({ $or: [{ tallyPartyId: party.name }, { name: party.name }] });
+      if (existing) {
+        existing.outstandingBalance = party.closingBalance || 0;
+        existing.gstin = party.gstin || existing.gstin;
+        existing.pan = party.pan || existing.pan;
+        await existing.save();
+        updated++;
+      } else {
+        await Dealer.create({
+          name: party.name,
+          displayName: party.name,
+          group: party.group || 'Sundry Debtors',
+          parent: party.parent || 'Sundry Debtors',
+          gstin: party.gstin || '',
+          pan: party.pan || '',
+          outstandingBalance: party.closingBalance || 0,
+          tallyPartyId: party.name,
+          creditLimit: party.creditLimit || 0,
+        });
+        created++;
+      }
+    }
+
+    logger.info(`Dealer sync from Tally: ${created} created, ${updated} updated`);
+    return { created, updated, total: tallyParties.length };
+  }
+
+  async syncOutstandingFromTally() {
+    const outstanding = await TallyOutstanding.find().lean();
+    const dealerMap = new Map();
+
+    for (const bill of outstanding) {
+      const name = bill.partyName || bill.ledgerName;
+      if (!name) continue;
+      if (!dealerMap.has(name)) dealerMap.set(name, { total: 0, overdue: 0, bills: [] });
+      const entry = dealerMap.get(name);
+      entry.total += bill.balance || bill.amount || 0;
+      entry.bills.push(bill);
+      if (bill.dueDate && new Date(bill.dueDate) < new Date()) {
+        entry.overdue += bill.balance || bill.amount || 0;
+      }
+    }
+
+    let updated = 0;
+    for (const [name, data] of dealerMap) {
+      const result = await Dealer.updateOne(
+        { name },
+        { outstandingBalance: data.total, overdueAmount: data.overdue }
+      );
+      if (result.modifiedCount > 0) updated++;
+    }
+
+    return { updated, totalDealers: dealerMap.size };
+  }
+
+  async getDealerStats() {
+    const stats = await Dealer.aggregate([
+      { $match: { isActive: true } },
+      { $group: {
+        _id: null,
+        totalDealers: { $sum: 1 },
+        totalOutstanding: { $sum: '$outstandingBalance' },
+        totalOverdue: { $sum: '$overdueAmount' },
+        avgOutstanding: { $avg: '$outstandingBalance' },
+        maxOutstanding: { $max: '$outstandingBalance' },
+      }},
+    ]);
+
+    const regionStats = await Dealer.aggregate([
+      { $match: { isActive: true } },
+      { $group: {
+        _id: '$region',
+        count: { $sum: 1 },
+        outstanding: { $sum: '$outstandingBalance' },
+      }},
+      { $sort: { outstanding: -1 } },
+    ]);
+
+    const topOverdue = await Dealer.find({ isActive: true, overdueAmount: { $gt: 0 } })
+      .sort({ overdueAmount: -1 })
+      .limit(10)
+      .select('name city overdueAmount outstandingBalance lastVisitDate')
+      .lean();
+
+    return {
+      summary: stats[0] || { totalDealers: 0, totalOutstanding: 0, totalOverdue: 0 },
+      byRegion: regionStats,
+      topOverdue,
+    };
+  }
+
+  async getRegions() {
+    return Dealer.distinct('region', { isActive: true, region: { $ne: '' } });
+  }
+
+  async getCities() {
+    return Dealer.distinct('city', { isActive: true, city: { $ne: '' } });
+  }
+}
+
+export default new DealerService();

@@ -202,3 +202,56 @@ export const mitraService = {
   health: () => api.get('/mitra/health'),
 };
 
+// Niyantran Location Services
+export const niyantranService = {
+  recordPing: (data) => api.post('/niyantran/ping', data),
+  getAllLocations: () => api.get('/niyantran/agents/location'),
+  getAgentLocation: (agentId) => api.get(`/niyantran/agents/${agentId}/location`),
+  getAgentRoute: (agentId, params) => api.get(`/niyantran/agents/${agentId}/route`, { params }),
+  checkIn: (data) => api.post('/niyantran/visit/check-in', data),
+  checkOut: (visitId, data) => api.put(`/niyantran/visit/${visitId}/check-out`, data),
+  getActiveVisits: () => api.get('/niyantran/visits/active'),
+  getVisits: (params) => api.get('/niyantran/visits', { params }),
+};
+
+// Dealer Services
+export const dealerService = {
+  getAll: (params) => api.get('/dealers', { params }),
+  getById: (id) => api.get(`/dealers/${id}`),
+  create: (data) => api.post('/dealers', data),
+  update: (id, data) => api.put(`/dealers/${id}`, data),
+  delete: (id) => api.delete(`/dealers/${id}`),
+  getSummary: (id) => api.get(`/dealers/${id}/summary`),
+  syncFromTally: () => api.post('/dealers/sync-tally'),
+  syncOutstanding: () => api.post('/dealers/sync-outstanding'),
+  getStats: () => api.get('/dealers/stats'),
+  getRegions: () => api.get('/dealers/regions'),
+  getCities: () => api.get('/dealers/cities'),
+};
+
+// Sales Agent Services
+export const salesAgentService = {
+  getAll: (params) => api.get('/sales-agents', { params }),
+  getById: (id) => api.get(`/sales-agents/${id}`),
+  create: (data) => api.post('/sales-agents', data),
+  update: (id, data) => api.put(`/sales-agents/${id}`, data),
+  delete: (id) => api.delete(`/sales-agents/${id}`),
+  getDashboard: (id) => api.get(`/sales-agents/${id}/dashboard`),
+  getPerformance: (id, params) => api.get(`/sales-agents/${id}/performance`, { params }),
+  assignDealer: (agentId, dealerId) => api.post(`/sales-agents/${agentId}/assign-dealer/${dealerId}`),
+  unassignDealer: (agentId, dealerId) => api.delete(`/sales-agents/${agentId}/unassign-dealer/${dealerId}`),
+  getMap: () => api.get('/sales-agents/map'),
+};
+
+// Notification Services
+export const notificationService = {
+  send: (data) => api.post('/notifications/send', data),
+  sendBulk: (data) => api.post('/notifications/send-bulk', data),
+  getAll: (params) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
+  registerDeviceToken: (data) => api.post('/notifications/device-token', data),
+  removeDeviceToken: (token) => api.delete(`/notifications/device-token/${token}`),
+};
+

@@ -41,6 +41,12 @@ import StatementDetail from './pages/statements/StatementDetail';
 
 import DataIngestion from './pages/ingestion/DataIngestion';
 
+import NiyantranLocation from './pages/niyantran/NiyantranLocation';
+import DealerList from './pages/dealers/DealerList';
+import DealerDetail from './pages/dealers/DealerDetail';
+import SalesAgentList from './pages/agents/SalesAgentList';
+import SalesAgentDetail from './pages/agents/SalesAgentDetail';
+
 import CompanySettings from './pages/settings/CompanySettings';
 import UserManagement from './pages/settings/UserManagement';
 
@@ -174,6 +180,15 @@ function App() {
           <Route path="/signals" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><SignalDashboard /></RoleProtectedRoute>} />
 
           <Route path="/ingestion" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DataIngestion /></RoleProtectedRoute>} />
+
+          <Route path="/niyantran" element={<NiyantranLocation />} />
+          <Route path="/dealers" element={<DealerList />} />
+          <Route path="/dealers/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerList /></RoleProtectedRoute>} />
+          <Route path="/dealers/:id" element={<DealerDetail />} />
+          <Route path="/dealers/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerDetail /></RoleProtectedRoute>} />
+          <Route path="/agents" element={<SalesAgentList />} />
+          <Route path="/agents/new" element={<RoleProtectedRoute allowedRoles={['admin']}><SalesAgentList /></RoleProtectedRoute>} />
+          <Route path="/agents/:id" element={<SalesAgentDetail />} />
 
           <Route path="/statements" element={<StatementsList />} />
           <Route path="/statements/upload" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><StatementsUpload /></RoleProtectedRoute>} />

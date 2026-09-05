@@ -83,6 +83,10 @@ import tantraRoutes from './routes/tantra.routes.js';
 import governanceRoutes from './routes/governance.routes.js';
 import financialRuntimeRoutes from './routes/financialRuntime.routes.js';
 import mitraRoutes from './routes/mitra.routes.js';
+import niyantranRoutes from './routes/niyantran.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import dealerRoutes from './routes/dealer.routes.js';
+import salesAgentRoutes from './routes/salesAgent.routes.js';
 import observabilityService from './services/observability.service.js';
 import bankingService from './services/banking.service.js';
 import auditService from './services/audit.service.js';
@@ -328,6 +332,10 @@ app.use('/api/v1/tantra', tantraRoutes);
 app.use('/api/v1/governance', governanceRoutes);
 app.use('/api/v1/financial-runtime', financialRuntimeRoutes);
 app.use('/api/v1/mitra', mitraRoutes);
+app.use('/api/v1/niyantran', niyantranRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/dealers', dealerRoutes);
+app.use('/api/v1/sales-agents', salesAgentRoutes);
 
 // SETU callback webhook endpoint (delegated to setuDispatch service)
 // Protected by HMAC signature verification for external webhook security
