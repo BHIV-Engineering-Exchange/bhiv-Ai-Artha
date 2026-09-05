@@ -30,7 +30,7 @@ const tallyOutstandingSchema = new mongoose.Schema({
   balance: { type: Number, default: 0 },
   billType: {
     type: String,
-    enum: ['New', 'Advance', 'Agst Ref', 'On Account', 'Credit', 'UNKNOWN'],
+    enum: ['New', 'Advance', 'Agst Ref', 'On Account', 'Credit', 'Dr', 'Cr', 'UNKNOWN'],
     default: 'UNKNOWN',
   },
   outstandingType: {

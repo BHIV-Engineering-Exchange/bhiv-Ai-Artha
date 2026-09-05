@@ -233,11 +233,11 @@ async function seed() {
 
     // Create notifications
     const notifMessages = [
-      { title: 'Payment Received', body: 'Sharma Electronics paid Rs 50,000', type: 'payment' },
-      { title: 'Visit Completed', body: 'Rajesh Kumar completed visit to Gupta Traders', type: 'visit' },
-      { title: 'Overdue Alert', body: 'Kumar Enterprises - Rs 2,00,000 overdue by 15 days', type: 'alert' },
-      { title: 'New Order', body: 'Patel & Sons placed order for Rs 75,000', type: 'order' },
-      { title: 'Agent Check-in', body: 'Amit Singh checked in at DLF Phase 3', type: 'location' },
+      { title: 'Payment Received', body: 'Sharma Electronics paid Rs 50,000', type: 'payment', category: 'finance' },
+      { title: 'Visit Completed', body: 'Rajesh Kumar completed visit to Gupta Traders', type: 'visit', category: 'niyantran' },
+      { title: 'Overdue Alert', body: 'Kumar Enterprises - Rs 2,00,000 overdue by 15 days', type: 'overdue', category: 'crm' },
+      { title: 'New Order', body: 'Patel & Sons placed order for Rs 75,000', type: 'info', category: 'crm' },
+      { title: 'Agent Check-in', body: 'Amit Singh checked in at DLF Phase 3', type: 'location', category: 'niyantran' },
     ];
     for (let i = 0; i < notifMessages.length; i++) {
       await Notification.create({

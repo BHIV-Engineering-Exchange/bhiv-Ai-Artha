@@ -20,7 +20,7 @@ export class CloudError extends Error {
   }
 }
 
-export async function pushToCloud({ url, apiKey, hmacSecret, payload, timeoutMs = 30000 }) {
+export async function pushToCloud({ url, apiKey, hmacSecret, payload, timeoutMs = 120000 }) {
   const body = JSON.stringify(payload);
   const contentHash = sha256(body);
   const signature = hmac(hmacSecret, contentHash);

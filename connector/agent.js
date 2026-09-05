@@ -381,13 +381,16 @@ async function syncDemo(config) {
   log('info', `Payload size: ${Buffer.byteLength(JSON.stringify(payload))} bytes`);
 
   try {
-    const result = await pushToCloud({
-      url: config.cloud.url,
-      apiKey: config.cloud.apiKey,
-      hmacSecret: config.cloud.hmacSecret,
-      payload,
-      timeoutMs: config.cloud.timeoutMs,
-    });
+    const result = await withRetry(
+      () => pushToCloud({
+        url: config.cloud.url,
+        apiKey: config.cloud.apiKey,
+        hmacSecret: config.cloud.hmacSecret,
+        payload,
+        timeoutMs: config.cloud.timeoutMs,
+      }),
+      { label: 'Cloud push', isTransient: isTransientCloudError },
+    );
 
     const duration = Date.now() - start;
     log('info', `✓ Cloud accepted ${total} records (${duration}ms)`);
@@ -404,6 +407,9 @@ async function syncDemo(config) {
       }
       if (err.code === 'SIGNATURE_INVALID') {
         log('error', '→ Check TALLY_CONNECTOR_HMAC_SECRET on cloud matches connector .env CLOUD_HMAC_SECRET');
+      }
+      if (err.code === 'TIMEOUT') {
+        log('error', '→ Cloud server may be waking up (Render free tier cold start). Try again in 30s.');
       }
     } else {
       log('error', `Demo failed: ${err.message}`);

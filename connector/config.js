@@ -33,7 +33,7 @@ function load() {
       url: raw.CLOUD_URL.replace(/\/$/, ''),
       apiKey: raw.CLOUD_API_KEY,
       hmacSecret: raw.CLOUD_HMAC_SECRET,
-      timeoutMs: Number(process.env.CLOUD_TIMEOUT_MS || 30000),
+      timeoutMs: Number(process.env.CLOUD_TIMEOUT_MS || 120000),
     },
     sync: {
       intervalMs: Number(process.env.SYNC_INTERVAL_MINUTES || 15) * 60000,
