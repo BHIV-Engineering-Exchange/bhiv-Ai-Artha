@@ -162,6 +162,205 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
 For Pravah deployment, see [docs/PRAVAH_DEPLOYMENT.md](docs/PRAVAH_DEPLOYMENT.md).
 
+---
+
+## 🎯 Demo Mode — Single Laptop Setup
+
+Run the full ARTHA demo on one laptop with no external dependencies. Demo data (12 dealers, 5 agents, GPS pings, visits) is seeded into MongoDB Atlas.
+
+### Prerequisites
+
+- **Node.js 18+** (`node -v` to check)
+- **npm** (comes with Node.js)
+- **Git**
+- Internet connection (backend connects to cloud MongoDB Atlas)
+
+### Step-by-Step Manual Setup
+
+#### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/BHIV-Engineering-Exchange/bhiv-Ai-Artha.git
+cd bhiv-Ai-Artha
+```
+
+#### Step 2: Install Backend Dependencies
+
+```bash
+cd backend
+npm install
+cd ..
+```
+
+#### Step 3: Install Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+#### Step 4: Verify Backend `.env` Configuration
+
+The backend `.env` file should already exist with the cloud MongoDB URI:
+
+```bash
+cd backend
+type .env
+```
+
+Key values that must be set:
+```
+PORT=5000
+MONGODB_URI=mongodb+srv://blackholeinfiverse54_db_user:Gjpl998Z6hsQLjJF@artha.rzneis7.mongodb.net/artha?appName=Artha
+JWT_SECRET=blackhole-auth-super-secure-random-secret-min-32-chars
+```
+
+#### Step 5: Seed Demo Data
+
+Open **Terminal 1** — this seeds 12 Bright Connection dealers, 5 sales agents, GPS pings, visits, and a demo admin user into MongoDB:
+
+```bash
+cd backend
+npm run seed:demo
+```
+
+Wait until you see:
+```
+========================================
+  DEMO DATA SEEDED SUCCESSFULLY
+========================================
+  Dealers:          12
+  Sales Agents:     5
+  Location Pings:   50+
+  Visits:           10+
+  Notifications:    5
+========================================
+```
+
+#### Step 6: Start Backend Server
+
+In the **same Terminal 1** (or open a new one):
+
+```bash
+cd backend
+npm run dev
+```
+
+Wait until you see:
+```
+Server is running on port 5000
+```
+
+Leave this terminal running.
+
+#### Step 7: Start Frontend Dev Server
+
+Open **Terminal 2**:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Wait until you see:
+```
+Local: http://localhost:5173/
+```
+
+Leave this terminal running.
+
+#### Step 8: Open the Demo
+
+Open your browser and go to:
+
+```
+http://localhost:5173
+```
+
+**Login credentials:**
+- Email: `admin@brightconnection.in`
+- Password: `admin123`
+
+### Demo Pages — What to Show
+
+| Route | Page | What to Demo |
+|-------|------|-------------|
+| `/` | Dashboard | Financial summary, KPIs, charts |
+| `/dealers` | Dealer List | 12 Bright Connection dealers, outstanding amounts, overdue badges, region filter |
+| `/dealers/:id` | Dealer Detail | Outstanding bills table, transactions, visit history |
+| `/agents` | Sales Agents | 5 agents with target progress, role filter, online status |
+| `/agents/:id` | Agent Detail | Daily stats, 7-day performance, current GPS location |
+| `/niyantran` | Niyantran | Live GPS tracking, online/offline status, battery, active visits, filter by status |
+| `/vouchers` | Vouchers | Tally-synced voucher data |
+| `/ledgers` | Ledgers | Chart of accounts, account balances |
+| `/reports` | Reports | P&L, Balance Sheet, Cash Flow, Trial Balance |
+
+### Demo Flow (15-20 min)
+
+1. **Login** (1 min) — Show the login page, enter credentials
+2. **Dashboard** (2 min) — Walk through financial KPIs, revenue charts
+3. **Dealer Management** (5 min) — Show dealer grid, click into a dealer with overdue amount, show outstanding bills
+4. **Sales Agents** (4 min) — Show agent list with target progress, click into an agent to see daily stats
+5. **Niyantran** (4 min) — Show live GPS tracking, filter by "Online"/"At Dealer"/"Offline", show active visits
+6. **Existing Features** (3 min) — Briefly show Vouchers, Ledgers, Reports
+
+### Demo Talking Points
+
+| Feature | Business Value |
+|---------|---------------|
+| Tally Connector | Automatic data sync — no manual entry, no errors |
+| Dealer CRM | Outstanding tracking, overdue alerts, complete dealer history |
+| Niyantran | Real-time GPS tracking, check-in/out, field force visibility |
+| Sales Agents | Target vs achievement, daily performance, route optimization |
+| Notifications | Payment alerts, overdue warnings, agent updates |
+| Reports | GST, P&L, Balance Sheet — all from live Tally data |
+
+### Architecture (for Q&A)
+
+```
+TallyPrime (office PC)     Cloud ARTHA (MongoDB Atlas)
+      │                          │
+      │  Connector (HMAC push)   │
+      ├─────────────────────────►│
+      │                          │
+Niyantran App (field)       Backend API (port 5000)
+      │                          │
+      │  GPS Pings               │
+      ├─────────────────────────►│
+                                 │
+                          Frontend (port 5173)
+```
+
+### Stopping the Demo
+
+Close all terminal windows, or press `Ctrl+C` in each terminal.
+
+### Re-running the Demo
+
+To reset and re-seed fresh demo data:
+
+```bash
+cd backend
+npm run seed:demo
+```
+
+Then restart the backend (`npm run dev`) and frontend (`npm run dev`).
+
+---
+
+### One-Click Demo (Alternative)
+
+If you prefer a single script that handles everything:
+
+```bash
+start-demo.bat
+```
+
+This opens 3 windows: seed script, backend, and frontend. Close all windows to stop.
+
+---
+
 ## 📊 API Documentation
 
 ### Authentication
@@ -319,6 +518,139 @@ GET /ready
 GET /live
 ```
 
+### Niyantran (Location Tracking)
+```bash
+# Record GPS ping
+POST /api/v1/niyantran/ping
+Body: { latitude, longitude, accuracy, batteryLevel, networkType, deviceId }
+
+# Get all agent locations
+GET /api/v1/niyantran/agents/location
+
+# Get specific agent location
+GET /api/v1/niyantran/agents/:agentId/location
+
+# Get agent route history
+GET /api/v1/niyantran/agents/:agentId/route?startDate=...&endDate=...
+
+# Check-in at dealer
+POST /api/v1/niyantran/visit/check-in
+Body: { dealerId, latitude, longitude, address, visitType, purpose }
+
+# Check-out from dealer
+PUT /api/v1/niyantran/visit/:visitId/check-out
+Body: { latitude, longitude, address, notes, outcome }
+
+# Get active visits
+GET /api/v1/niyantran/visits/active
+
+# Get all visits (with filters)
+GET /api/v1/niyantran/visits?agentId=...&status=...&startDate=...&endDate=...
+```
+
+### Dealer Management
+```bash
+# Get all dealers
+GET /api/v1/dealers?region=...&search=...&page=1&limit=20
+
+# Get dealer by ID
+GET /api/v1/dealers/:id
+
+# Create dealer
+POST /api/v1/dealers
+Body: { name, city, region, phone, email, gstin, creditLimit }
+
+# Update dealer
+PUT /api/v1/dealers/:id
+Body: { name, city, outstandingBalance, ... }
+
+# Delete dealer
+DELETE /api/v1/dealers/:id
+
+# Get dealer summary (outstanding + recent vouchers)
+GET /api/v1/dealers/:id/summary
+
+# Sync dealers from Tally
+POST /api/v1/dealers/sync-tally
+
+# Sync outstanding from Tally
+POST /api/v1/dealers/sync-outstanding
+
+# Get dealer stats
+GET /api/v1/dealers/stats
+
+# Get all regions
+GET /api/v1/dealers/regions
+
+# Get all cities
+GET /api/v1/dealers/cities
+```
+
+### Sales Agent Management
+```bash
+# Get all agents
+GET /api/v1/sales-agents?role=...&region=...&page=1&limit=20
+
+# Get agent by ID
+GET /api/v1/sales-agents/:id
+
+# Create agent
+POST /api/v1/sales-agents
+Body: { name, phone, email, role, region, area }
+
+# Update agent
+PUT /api/v1/sales-agents/:id
+Body: { name, region, targetAmount, ... }
+
+# Delete agent
+DELETE /api/v1/sales-agents/:id
+
+# Get agent dashboard (today's stats, location, dealers, performance)
+GET /api/v1/sales-agents/:id/dashboard
+
+# Get agent performance history
+GET /api/v1/sales-agents/:id/performance?days=30
+
+# Assign dealer to agent
+POST /api/v1/sales-agents/:agentId/assign-dealer/:dealerId
+
+# Unassign dealer from agent
+DELETE /api/v1/sales-agents/:agentId/unassign-dealer/:dealerId
+
+# Get agent map data
+GET /api/v1/sales-agents/map
+```
+
+### Notifications
+```bash
+# Send notification
+POST /api/v1/notifications/send
+Body: { title, body, type, targetAgentId }
+
+# Send bulk notifications
+POST /api/v1/notifications/send-bulk
+Body: { title, body, type, targetAgentIds: [...] }
+
+# Get all notifications
+GET /api/v1/notifications?page=1&limit=20
+
+# Get unread count
+GET /api/v1/notifications/unread-count
+
+# Mark as read
+PUT /api/v1/notifications/:id/read
+
+# Mark all as read
+PUT /api/v1/notifications/read-all
+
+# Register device token (for push notifications)
+POST /api/v1/notifications/device-token
+Body: { token, platform }
+
+# Remove device token
+DELETE /api/v1/notifications/device-token/:token
+```
+
 ### BHIV Governance API (30+ Endpoints)
 ```bash
 # Capability Registry
@@ -453,14 +785,14 @@ This verifies:
 
 ### Backend Stack
 - **Node.js 18+** with Express.js
-- **MongoDB 7+** with Mongoose ODM (35 models)
+- **MongoDB 7+** with Mongoose ODM (41 models)
 - **Redis 7+** for caching
 - **Decimal.js** for precise financial calculations
 - **HMAC-SHA256** for ledger hash-chain
 - **JWT** for authentication
-- **47 Services** — Core accounting, compliance, BHIV governance, integration, runtime, infrastructure
-- **26 Controllers** — Request handlers for all API endpoints
-- **27 Route Files** — RESTful API routing
+- **51 Services** — Core accounting, compliance, BHIV governance, integration, runtime, infrastructure, Niyantran, Dealer CRM, Sales Agents
+- **30 Controllers** — Request handlers for all API endpoints
+- **31 Route Files** — RESTful API routing
 - **11 Middleware** — Auth, authority enforcement, policy engine, security, monitoring, caching
 
 ### Frontend Stack
@@ -470,7 +802,7 @@ This verifies:
 - **React Router** for navigation
 - **Axios** for API calls
 
-### Database Models (35)
+### Database Models (41)
 
 **Core Accounting (8):**
 1. User — Authentication, roles (admin/accountant/viewer), bcrypt passwords
@@ -521,7 +853,15 @@ This verifies:
 34. InsightFlowExperience — User behavior analytics
 35. JournalLine — (embedded in JournalEntry) individual debit/credit lines
 
-### Key Services (47)
+**Niyantran & Field Force (6):**
+36. LocationPing — GPS pings from Niyantran app (lat/lng, battery, network, dealer proximity)
+37. Visit — Dealer check-in/out, duration, outcome, orders, collection amount
+38. Dealer — Bright Connection dealer CRM (outstanding, overdue, GSTIN, region, assigned agent)
+39. SalesAgent — Field sales team (role, target, assigned dealers, last known location)
+40. DeviceToken — Push notification device tokens (FCM/APNs)
+41. Notification — In-app and push notifications (payment alerts, overdue warnings, agent updates)
+
+### Key Services (51)
 
 **Core Accounting (10):**
 - Authentication Service — JWT login/signup, password hashing
@@ -586,14 +926,28 @@ This verifies:
 - OCR Service — Receipt image text extraction (Tesseract.js)
 - PDF Service — PDF generation for reports and invoices
 
+**Niyantran & Field Force (4):**
+- Niyantran Service — GPS ping recording, haversine distance, dealer proximity, check-in/out
+- Dealer Service — Dealer CRUD, Tally sync, outstanding tracking, stats
+- Sales Agent Service — Agent CRUD, dashboard, performance history, dealer assignment
+- Push Notification Service — Web-push, device token management, alert dispatch
+
 ## 📊 Sample Data
 
-After seeding, you'll have:
+After seeding (`npm run seed:comprehensive`), you'll have:
 - **33 Chart of Accounts** (Assets, Liabilities, Equity, Income, Expenses)
 - **Sample Invoices** with automatic journal entries
 - **Sample Expenses** with approval workflow
 - **6 TDS Entries** (Q4 FY2025-26)
 - **Posted Journal Entries** maintaining double-entry integrity
+
+After demo seed (`npm run seed:demo`), you'll have:
+- **12 Bright Connection Dealers** (Delhi/NCR region with outstanding balances)
+- **5 Sales Agents** (with target progress and assigned dealers)
+- **50+ GPS Location Pings** (simulating real-time field tracking)
+- **10+ Dealer Visits** (completed and in-progress)
+- **5 Notifications** (payment alerts, overdue warnings)
+- **1 Demo Admin User** (admin@brightconnection.in / admin123)
 
 ## 🧪 Testing
 
@@ -626,7 +980,7 @@ For issues and support:
 
 ---
 
-**Last Updated**: July 10, 2026  
+**Last Updated**: September 5, 2026  
 **Version**: 0.1  
 **Status**: BHIV Ecosystem Production Participant ✓  
 **Integrity**: Verified ✓  
@@ -634,7 +988,7 @@ For issues and support:
 **BHIV Integration**: Complete ✓  
 **SETU Pipeline**: Operational ✓  
 **TANTRA Chain**: Operational ✓  
-**Models**: 35 ✓  
-**Services**: 47 ✓  
-**Routes**: 27 ✓  
+**Models**: 41 ✓  
+**Services**: 51 ✓  
+**Routes**: 31 ✓  
 **Governance Endpoints**: 30+ ✓
