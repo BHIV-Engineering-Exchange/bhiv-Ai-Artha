@@ -34,6 +34,7 @@
     "format": "prettier --write src/",
     "seed": "node scripts/seed.js",
     "seed:comprehensive": "node scripts/seed-comprehensive.js",
+    "seed:demo": "node scripts/seed-demo.js",
     "verify:seed": "node scripts/verify-seed-data.js",
     "demo": "node scripts/demo-workflow.js",
     "verify:controllers": "node scripts/verify-controllers.js",
