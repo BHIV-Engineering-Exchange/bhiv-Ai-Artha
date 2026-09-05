@@ -16,6 +16,7 @@ import { fetchFromTally, buildEnvelope, buildDataEnvelope, buildExportDataEnvelo
 import { parseLedgers, parseOutstanding, parseVouchers } from './tallyParser.js';
 import { normalizeParties, normalizeOutstanding, normalizeVouchers, buildSyncRun } from './normalizer.js';
 import { pushToCloud, CloudError } from './cloudClient.js';
+import { generateDemoParties, generateDemoOutstanding, generateDemoVouchers, generateDemoSyncRun } from './demoData.js';
 
 const LOG_PREFIX = '[TALLY-CONNECTOR]';
 
@@ -336,6 +337,81 @@ async function syncOnce(config) {
   }
 }
 
+/**
+ * Demo mode: generates mock Bright Connection data and pushes to cloud.
+ * No Tally required. Shows the full connector → cloud pipeline.
+ */
+async function syncDemo(config) {
+  const traceId = `demo-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const start = Date.now();
+  const company = config.tally.company || 'Bright Connection';
+  log('info', `=== DEMO MODE === trace=${traceId}`);
+  log('info', `Company: ${company}`);
+  log('info', `Cloud:   ${config.cloud.url}`);
+
+  // Generate mock data
+  log('info', 'Generating mock Bright Connection data...');
+  const rawParties = generateDemoParties();
+  const rawOutstanding = generateDemoOutstanding();
+  const rawVouchers = generateDemoVouchers();
+  log('info', `Generated: ${rawParties.length} parties, ${rawOutstanding.length} outstanding bills, ${rawVouchers.length} vouchers`);
+
+  // Normalize to MDU records
+  const opts = { tenantId: config.tenantId, company };
+  const partyRecords = normalizeParties(rawParties, opts);
+  const outstandingRecords = normalizeOutstanding(rawOutstanding, opts);
+  const voucherRecords = normalizeVouchers(rawVouchers, opts);
+  const counts = { parties: partyRecords.length, outstanding: outstandingRecords.length, vouchers: voucherRecords.length };
+  const total = counts.parties + counts.outstanding + counts.vouchers;
+  log('info', `Normalized: ${total} MDU records`);
+
+  // Push to cloud
+  const allRecords = [...partyRecords, ...outstandingRecords, ...voucherRecords];
+  const syncRun = generateDemoSyncRun(counts, Date.now() - start);
+  const payload = {
+    traceId,
+    tenantId: config.tenantId,
+    company,
+    records: allRecords,
+    syncRun,
+    totalRecords: allRecords.length,
+  };
+
+  log('info', `Pushing to cloud: POST ${config.cloud.url}/api/v1/tally-connect/ingest`);
+  log('info', `Payload size: ${Buffer.byteLength(JSON.stringify(payload))} bytes`);
+
+  try {
+    const result = await pushToCloud({
+      url: config.cloud.url,
+      apiKey: config.cloud.apiKey,
+      hmacSecret: config.cloud.hmacSecret,
+      payload,
+      timeoutMs: config.cloud.timeoutMs,
+    });
+
+    const duration = Date.now() - start;
+    log('info', `✓ Cloud accepted ${total} records (${duration}ms)`);
+    log('info', `  Parties: ${counts.parties}, Outstanding: ${counts.outstanding}, Vouchers: ${counts.vouchers}`);
+    log('info', `  Trace: ${traceId}`);
+    log('info', `=== DEMO COMPLETE ===`);
+    return { success: true, traceId, counts, duration };
+  } catch (err) {
+    const duration = Date.now() - start;
+    if (err instanceof CloudError) {
+      log('error', `Cloud push failed [${err.code}]: ${err.message}`);
+      if (err.code === 'AUTH_FAILED') {
+        log('error', '→ Check TALLY_CONNECTOR_API_KEY on cloud matches connector .env CLOUD_API_KEY');
+      }
+      if (err.code === 'SIGNATURE_INVALID') {
+        log('error', '→ Check TALLY_CONNECTOR_HMAC_SECRET on cloud matches connector .env CLOUD_HMAC_SECRET');
+      }
+    } else {
+      log('error', `Demo failed: ${err.message}`);
+    }
+    return { success: false, error: err.message, traceId, duration };
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -356,6 +432,12 @@ async function main() {
     log('info', `  Interval:  ${config.sync.intervalMs / 60000}min`);
     log('info', `  Backfill:  ${config.sync.defaultBackfillDays} days`);
     return;
+  }
+
+  // Demo mode: generate mock data and push to cloud (no Tally needed)
+  if (args.includes('--demo')) {
+    const result = await syncDemo(config);
+    process.exit(result.success ? 0 : 1);
   }
 
   log('info', `Starting connector: Tally=${config.tally.host}:${config.tally.port} → Cloud=${config.cloud.url}`);

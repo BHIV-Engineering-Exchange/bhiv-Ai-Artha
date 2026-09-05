@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node agent.js",
     "once": "node agent.js --once",
+    "demo": "node agent.js --demo",
     "status": "node agent.js --status",
     "test:readonly": "node agent.js --test-readonly"
   },
