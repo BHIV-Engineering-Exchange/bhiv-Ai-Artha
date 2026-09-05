@@ -69,10 +69,17 @@ function splitBlocks(xml, tag) {
 function parseTallyDate(value) {
   if (!value) return null;
   const v = String(value).trim();
-  // DDMMYYYY format (Tally native)
+  if (!v || v === '0' || v === '-') return null;
+
+  // DDMMYYYY format (Tally native, e.g. "20092026" = 20-Sep-2026)
   const ddmmyyyy = v.match(/^(\d{2})(\d{2})(\d{4})$/);
-  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
-  // DD-Mon-YY or DD-Mon-YYYY
+  if (ddmmyyyy) {
+    const dd = ddmmyyyy[1], mm = ddmmyyyy[2], yyyy = ddmmyyyy[3];
+    const d = new Date(`${yyyy}-${mm}-${dd}`);
+    if (!Number.isNaN(d.getTime())) return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // DD-Mon-YY or DD-Mon-YYYY (e.g. "20-Sep-26" or "20-Sep-2026")
   const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const dmy = v.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
   if (dmy) {
@@ -85,9 +92,57 @@ function parseTallyDate(value) {
       return `${year}-${mm}-${dd}`;
     }
   }
-  // ISO-ish fallback
+
+  // YYYY-MM-DD (ISO format, already correct)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) return v;
+  }
+
+  // YYYYMMDD format (e.g. "20260920")
+  const yyyymmdd = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (yyyymmdd) {
+    const d = new Date(`${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`);
+    if (!Number.isNaN(d.getTime())) return `${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`;
+  }
+
+  // DD/MM/YYYY or DD/MM/YY
+  const slash = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    let year = Number(slash[3]);
+    if (year < 100) year += 2000;
+    const dd = String(Number(slash[1])).padStart(2, '0');
+    const mm = String(Number(slash[2])).padStart(2, '0');
+    const d = new Date(`${year}-${mm}-${dd}`);
+    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+  }
+
+  // DD-MM-YY or DD-MM-YYYY (e.g. "20-09-2026" or "20-09-26")
+  const ddmmyy = v.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+  if (ddmmyy) {
+    let year = Number(ddmmyy[3]);
+    if (year < 100) year += 2000;
+    const dd = String(Number(ddmmyy[1])).padStart(2, '0');
+    const mm = String(Number(ddmmyy[2])).padStart(2, '0');
+    const d = new Date(`${year}-${mm}-${dd}`);
+    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+  }
+
+  // DDMMYY format (e.g. "200926" = 20-Sep-2026)
+  const ddmmyy6 = v.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (ddmmyy6) {
+    let year = Number(ddmmyy6[3]);
+    if (year < 100) year += 2000;
+    const dd = ddmmyy6[1], mm = ddmmyy6[2];
+    const d = new Date(`${year}-${mm}-${dd}`);
+    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+  }
+
+  // JavaScript Date fallback
   const iso = new Date(v);
   if (!Number.isNaN(iso.getTime())) return iso.toISOString().slice(0, 10);
+
+  // Unable to parse — return null instead of crashing
   return null;
 }
 

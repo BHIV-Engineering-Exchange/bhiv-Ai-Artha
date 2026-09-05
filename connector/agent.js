@@ -204,6 +204,7 @@ async function syncOnce(config) {
 
       const outstandingXml = await tallyFetch(config, outstandingEnvelope);
       log('info', `Tally response: ${Buffer.byteLength(outstandingXml)} bytes`);
+      log('info', `Outstanding response snippet: ${outstandingXml.substring(0, 500)}`);
       if (outstandingXml.includes('Could not find') || outstandingXml.includes('Error in TDL')) {
         log('warn', 'Tally returned TDL error for Bills Receivable. Trying Bills Payable...');
       } else {
@@ -222,6 +223,8 @@ async function syncOnce(config) {
           company,
         });
         const payableXml = await tallyFetch(config, payableEnvelope);
+        log('info', `Payable response: ${Buffer.byteLength(payableXml)} bytes`);
+        log('info', `Payable response snippet: ${payableXml.substring(0, 500)}`);
         if (!payableXml.includes('Could not find') && !payableXml.includes('Error in TDL')) {
           const payable = parseOutstanding(payableXml);
           log('info', `Parsed: ${payable.length} outstanding bills (payable)`);
@@ -247,6 +250,7 @@ async function syncOnce(config) {
 
       const voucherXml = await tallyFetch(config, voucherEnvelope);
       log('info', `Tally response: ${Buffer.byteLength(voucherXml)} bytes`);
+      log('info', `Voucher response snippet: ${voucherXml.substring(0, 500)}`);
       if (voucherXml.includes('Could not find') || voucherXml.includes('Error in TDL')) {
         log('warn', 'Tally returned TDL error for DayBook. Skipping vouchers.');
       } else {
@@ -258,11 +262,21 @@ async function syncOnce(config) {
       log('warn', `Voucher fetch failed (non-fatal): ${err.message}`);
     }
 
-    // Step 4: Normalize to MDU records
+    // Step 4: Normalize to MDU records (each type individually protected)
     const opts = { tenantId: config.tenantId, company };
-    const partyRecords = normalizeParties(ledgers, opts);
-    const outstandingRecords = normalizeOutstanding(outstanding, opts);
-    const voucherRecords = normalizeVouchers(vouchers, opts);
+    let partyRecords = [];
+    let outstandingRecords = [];
+    let voucherRecords = [];
+
+    try { partyRecords = normalizeParties(ledgers, opts); } catch (e) {
+      log('error', `Failed to normalize parties: ${e.message}`);
+    }
+    try { outstandingRecords = normalizeOutstanding(outstanding, opts); } catch (e) {
+      log('error', `Failed to normalize outstanding: ${e.message}`);
+    }
+    try { voucherRecords = normalizeVouchers(vouchers, opts); } catch (e) {
+      log('error', `Failed to normalize vouchers: ${e.message}`);
+    }
 
     const counts = { parties: partyRecords.length, outstanding: outstandingRecords.length, vouchers: voucherRecords.length };
     const total = Object.values(counts).reduce((s, c) => s + c, 0);

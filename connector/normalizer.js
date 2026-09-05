@@ -37,13 +37,24 @@ export function normalizeParties(ledgers, { tenantId, company }) {
 
 export function normalizeOutstanding(bills, { tenantId, company }) {
   return bills.map((b) => {
-    const billDate = b.billDate ? new Date(b.billDate) : null;
-    const dueDate = b.dueDate ? new Date(b.dueDate) : null;
-    const now = new Date();
-    const daysOverdue = dueDate && dueDate < now ? Math.floor((now - dueDate) / 86400000) : 0;
+    let billDate = null;
+    let dueDate = null;
+    let daysOverdue = 0;
+    try {
+      if (b.billDate) {
+        billDate = new Date(b.billDate);
+        if (Number.isNaN(billDate.getTime())) billDate = null;
+      }
+      if (b.dueDate) {
+        dueDate = new Date(b.dueDate);
+        if (Number.isNaN(dueDate.getTime())) dueDate = null;
+      }
+      const now = new Date();
+      daysOverdue = dueDate && dueDate < now ? Math.floor((now - dueDate) / 86400000) : 0;
+    } catch { /* ignore bad dates */ }
     return makeRecord('outstanding', {
       party_name: b.partyName,
-      bill_name: b.billName,
+      bill_name: b.billNo || b.billName || '',
       bill_date: billDate ? billDate.toISOString().slice(0, 10) : null,
       due_date: dueDate ? dueDate.toISOString().slice(0, 10) : null,
       days_overdue: daysOverdue,
@@ -55,17 +66,26 @@ export function normalizeOutstanding(bills, { tenantId, company }) {
 }
 
 export function normalizeVouchers(vouchers, { tenantId, company }) {
-  return vouchers.map((v) => makeRecord('voucher', {
-    voucher_type: v.voucherType,
-    voucher_number: v.voucherNumber,
-    date: v.date ? new Date(v.date).toISOString().slice(0, 10) : null,
-    party_name: v.partyName,
-    amount: v.amount,
-    narration: v.narration,
-    reference: v.reference,
-    entries: v.entries,
-    gst_details: v.gstDetails,
-  }, tenantId, company));
+  return vouchers.map((v) => {
+    let isoDate = null;
+    try {
+      if (v.date) {
+        const d = new Date(v.date);
+        if (!Number.isNaN(d.getTime())) isoDate = d.toISOString().slice(0, 10);
+      }
+    } catch { /* ignore bad dates */ }
+    return makeRecord('voucher', {
+      voucher_type: v.voucherType,
+      voucher_number: v.voucherNumber,
+      date: isoDate,
+      party_name: v.partyName,
+      amount: v.amount,
+      narration: v.narration,
+      reference: v.reference,
+      entries: v.entries,
+      gst_details: v.gstDetails,
+    }, tenantId, company);
+  });
 }
 
 export function buildSyncRun({ tenantId, company, counts, durationMs }) {
