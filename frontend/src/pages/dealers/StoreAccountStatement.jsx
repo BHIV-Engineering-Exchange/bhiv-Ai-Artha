@@ -44,14 +44,34 @@ const StoreAccountStatement = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [dealerRes, txRes, summaryRes] = await Promise.all([
+      const [dealerRes, summaryRes] = await Promise.all([
         api.get(`/dealers/${id}`),
-        api.get(`/dealers/${id}/transactions?limit=500`),
         api.get(`/dealers/${id}/summary`),
       ]);
-      setDealer(dealerRes.data?.data || dealerRes.data);
-      setTransactions(txRes.data?.data || txRes.data || []);
-      setSummary(summaryRes.data?.data);
+      const dealerData = dealerRes.data?.data || dealerRes.data;
+      const summaryData = summaryRes.data?.data || summaryRes.data;
+      setDealer(dealerData);
+      setSummary(summaryData);
+      const bills = summaryData?.outstanding?.bills || [];
+      const vouchers = (summaryData?.recentVouchers || []).map((v) => ({
+        date: v.date,
+        type: v.voucherType,
+        number: v.voucherNumber,
+        narration: v.narration || '',
+        amount: v.amount,
+      }));
+      const txFromBills = bills.map((b) => ({
+        date: b.billDate || b.createdAt,
+        type: b.billType || 'Bill',
+        number: b.billNo,
+        narration: b.ledgerName || '',
+        amount: b.amount,
+        received: b.received || 0,
+        balance: b.balance || 0,
+        dueDate: b.dueDate,
+        daysOverdue: b.daysOverdue || 0,
+      }));
+      setTransactions([...txFromBills, ...vouchers]);
     } catch (err) {
       console.error('Failed to fetch store account data:', err);
     } finally {

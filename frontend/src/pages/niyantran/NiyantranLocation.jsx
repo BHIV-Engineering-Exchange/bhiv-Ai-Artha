@@ -86,9 +86,9 @@ const NiyantranLocation = () => {
         api.get('/niyantran/visits/active'),
         api.get('/dealers').catch(() => ({ data: { data: [] } })),
       ]);
-      setLocations(locRes.data.data || []);
-      setActiveVisits(visitRes.data.data || []);
-      setDealers(dealerRes.data.data || []);
+      setLocations(locRes.data.data || locRes.data.locations || []);
+      setActiveVisits(visitRes.data.data || visitRes.data.visits || []);
+      setDealers(dealerRes.data.dealers || dealerRes.data.data || []);
     } catch (err) {
       console.error('Failed to fetch location data:', err);
     } finally {

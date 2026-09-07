@@ -19,9 +19,11 @@ class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      const errMsg = this.state.error?.message || String(this.state.error);
+      const errStack = this.state.error?.stack || '';
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
-          <div className="text-center p-8 bg-card rounded-2xl shadow-xl max-w-md border border-border/30">
+          <div className="text-center p-8 bg-card rounded-2xl shadow-xl max-w-lg border border-border/30">
             <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -31,6 +33,10 @@ class ErrorBoundary extends Component {
             <p className="text-muted-foreground mb-4">
               An unexpected error occurred. Please try refreshing the page.
             </p>
+            <div className="text-left bg-muted rounded-lg p-3 mb-4 max-h-48 overflow-auto">
+              <p className="text-xs font-mono text-destructive font-bold mb-1">{errMsg}</p>
+              <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap">{errStack.split('\n').slice(0,5).join('\n')}</pre>
+            </div>
             <button
               onClick={() => window.location.reload()}
               className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all duration-300 font-medium"

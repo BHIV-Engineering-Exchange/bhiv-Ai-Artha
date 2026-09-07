@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 
@@ -41,16 +41,22 @@ import StatementDetail from './pages/statements/StatementDetail';
 
 import DataIngestion from './pages/ingestion/DataIngestion';
 
-import NiyantranLocation from './pages/niyantran/NiyantranLocation';
+const NiyantranLocation = lazy(() => import('./pages/niyantran/NiyantranLocation'));
 import DealerList from './pages/dealers/DealerList';
 import DealerDetail from './pages/dealers/DealerDetail';
-import StorefrontOCR from './pages/dealers/StorefrontOCR';
-import StoreAccountStatement from './pages/dealers/StoreAccountStatement';
+const StorefrontOCR = lazy(() => import('./pages/dealers/StorefrontOCR'));
+const StoreAccountStatement = lazy(() => import('./pages/dealers/StoreAccountStatement'));
 import SalesAgentList from './pages/agents/SalesAgentList';
 import SalesAgentDetail from './pages/agents/SalesAgentDetail';
 
 import CompanySettings from './pages/settings/CompanySettings';
 import UserManagement from './pages/settings/UserManagement';
+
+const LazyLoad = ({ children }) => (
+  <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+    {children}
+  </Suspense>
+);
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -183,13 +189,13 @@ function App() {
 
           <Route path="/ingestion" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DataIngestion /></RoleProtectedRoute>} />
 
-          <Route path="/niyantran" element={<NiyantranLocation />} />
+          <Route path="/niyantran" element={<LazyLoad><NiyantranLocation /></LazyLoad>} />
           <Route path="/dealers" element={<DealerList />} />
           <Route path="/dealers/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerList /></RoleProtectedRoute>} />
           <Route path="/dealers/:id" element={<DealerDetail />} />
           <Route path="/dealers/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerDetail /></RoleProtectedRoute>} />
-          <Route path="/dealers/storefront-ocr" element={<StorefrontOCR />} />
-          <Route path="/dealers/:id/statement" element={<StoreAccountStatement />} />
+          <Route path="/dealers/storefront-ocr" element={<LazyLoad><StorefrontOCR /></LazyLoad>} />
+          <Route path="/dealers/:id/statement" element={<LazyLoad><StoreAccountStatement /></LazyLoad>} />
           <Route path="/agents" element={<SalesAgentList />} />
           <Route path="/agents/new" element={<RoleProtectedRoute allowedRoles={['admin']}><SalesAgentList /></RoleProtectedRoute>} />
           <Route path="/agents/:id" element={<SalesAgentDetail />} />

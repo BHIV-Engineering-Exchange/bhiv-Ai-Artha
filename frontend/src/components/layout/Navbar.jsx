@@ -52,28 +52,24 @@ const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const [notifRes, countRes] = await Promise.allSettled([
+      const [notifRes, countRes] = await Promise.all([
         notificationService.getAll({ limit: 10, unreadOnly: false }),
         notificationService.getUnreadCount(),
       ]);
-      if (notifRes.status === 'fulfilled') {
-        setNotifications(notifRes.value.data?.data || notifRes.value.data || []);
-      }
-      if (countRes.status === 'fulfilled') {
-        setUnreadCount(countRes.value.data?.count || 0);
-      }
+      setNotifications(Array.isArray(notifRes.data?.notifications) ? notifRes.data.notifications : Array.isArray(notifRes.data?.data) ? notifRes.data.data : []);
+      setUnreadCount(countRes.data?.data?.count || countRes.data?.count || 0);
     } catch (err) {
-      // Silent — notifications are non-critical
+      console.error('Failed to fetch notifications:', err);
     }
   }, []);
 
   useEffect(() => {
-    if (user?._id) {
+    if (user) {
       fetchNotifications();
       const interval = setInterval(fetchNotifications, 60000);
       return () => clearInterval(interval);
     }
-  }, [fetchNotifications, user?._id]);
+  }, [fetchNotifications, user]);
 
   const handleMarkRead = async (id) => {
     try {

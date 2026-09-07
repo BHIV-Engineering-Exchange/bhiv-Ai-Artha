@@ -55,7 +55,7 @@ const StorefrontOCR = () => {
   const fetchDealers = async () => {
     try {
       const res = await api.get('/dealers');
-      setDealers(res.data?.data || res.data || []);
+      setDealers(Array.isArray(res.data?.dealers) ? res.data.dealers : Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch dealers:', err);
     }
