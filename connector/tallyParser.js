@@ -21,10 +21,19 @@ export function parseAmount(value) {
   return (marker.startsWith('cr') ? -1 : 1) * sign * Math.abs(num);
 }
 
+function decodeEntities(str) {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 function readTag(xml, tag) {
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const m = xml.match(re);
-  return m ? m[1].trim() : '';
+  return m ? decodeEntities(m[1].trim()) : '';
 }
 
 function readAttr(block, attr) {
@@ -66,44 +75,59 @@ function splitBlocks(xml, tag) {
   return blocks;
 }
 
-function parseTallyDate(value) {
+/** Strict calendar validation: checks year/month/day ranges and actual day count. */
+function isValidCalendarDate(year, month, day) {
+  if (year < 1900 || year > 2100) return false;
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  // Check actual day count for the month (handles Feb leap year)
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return day <= daysInMonth;
+}
+
+/** Format validated date components as ISO string. */
+function fmtDate(year, month, day) {
+  if (!isValidCalendarDate(year, month, day)) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+export function parseTallyDate(value) {
   if (!value) return null;
   const v = String(value).trim();
   if (!v || v === '0' || v === '-') return null;
 
-  // DDMMYYYY format (Tally native, e.g. "20092026" = 20-Sep-2026)
-  const ddmmyyyy = v.match(/^(\d{2})(\d{2})(\d{4})$/);
-  if (ddmmyyyy) {
-    const dd = ddmmyyyy[1], mm = ddmmyyyy[2], yyyy = ddmmyyyy[3];
-    const d = new Date(`${yyyy}-${mm}-${dd}`);
-    if (!Number.isNaN(d.getTime())) return `${yyyy}-${mm}-${dd}`;
+  // YYYY-MM-DD (ISO format) — strict validation
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const parts = v.split('-');
+    return fmtDate(Number(parts[0]), Number(parts[1]), Number(parts[2]));
+  }
+
+  // YYYYMMDD format (e.g. "20260920") — try before DDMMYYYY to avoid ambiguity
+  // Only return if valid; otherwise fall through to DDMMYYYY
+  const yyyymmdd = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (yyyymmdd) {
+    const result = fmtDate(Number(yyyymmdd[1]), Number(yyyymmdd[2]), Number(yyyymmdd[3]));
+    if (result) return result;
+    // Fall through to DDMMYYYY if YYYYMMDD produced invalid date (e.g. 20092026 → month 20)
   }
 
   // DD-Mon-YY or DD-Mon-YYYY (e.g. "20-Sep-26" or "20-Sep-2026")
-  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const dmy = v.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
   if (dmy) {
-    const monthIdx = months.indexOf(dmy[2].toLowerCase());
+    const monthIdx = MONTH_NAMES.indexOf(dmy[2].toLowerCase());
     if (monthIdx !== -1) {
       let year = Number(dmy[3]);
       if (year < 100) year += 2000;
-      const mm = String(monthIdx + 1).padStart(2, '0');
-      const dd = String(dmy[1]).padStart(2, '0');
-      return `${year}-${mm}-${dd}`;
+      return fmtDate(year, monthIdx + 1, Number(dmy[1]));
     }
   }
 
-  // YYYY-MM-DD (ISO format, already correct)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-    const d = new Date(v);
-    if (!Number.isNaN(d.getTime())) return v;
-  }
-
-  // YYYYMMDD format (e.g. "20260920")
-  const yyyymmdd = v.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (yyyymmdd) {
-    const d = new Date(`${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`);
-    if (!Number.isNaN(d.getTime())) return `${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`;
+  // DDMMYYYY format (Tally native, e.g. "20092026" = 20-Sep-2026)
+  const ddmmyyyy = v.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (ddmmyyyy) {
+    return fmtDate(Number(ddmmyyyy[3]), Number(ddmmyyyy[2]), Number(ddmmyyyy[1]));
   }
 
   // DD/MM/YYYY or DD/MM/YY
@@ -111,10 +135,7 @@ function parseTallyDate(value) {
   if (slash) {
     let year = Number(slash[3]);
     if (year < 100) year += 2000;
-    const dd = String(Number(slash[1])).padStart(2, '0');
-    const mm = String(Number(slash[2])).padStart(2, '0');
-    const d = new Date(`${year}-${mm}-${dd}`);
-    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+    return fmtDate(year, Number(slash[2]), Number(slash[1]));
   }
 
   // DD-MM-YY or DD-MM-YYYY (e.g. "20-09-2026" or "20-09-26")
@@ -122,10 +143,7 @@ function parseTallyDate(value) {
   if (ddmmyy) {
     let year = Number(ddmmyy[3]);
     if (year < 100) year += 2000;
-    const dd = String(Number(ddmmyy[1])).padStart(2, '0');
-    const mm = String(Number(ddmmyy[2])).padStart(2, '0');
-    const d = new Date(`${year}-${mm}-${dd}`);
-    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+    return fmtDate(year, Number(ddmmyy[2]), Number(ddmmyy[1]));
   }
 
   // DDMMYY format (e.g. "200926" = 20-Sep-2026)
@@ -133,16 +151,10 @@ function parseTallyDate(value) {
   if (ddmmyy6) {
     let year = Number(ddmmyy6[3]);
     if (year < 100) year += 2000;
-    const dd = ddmmyy6[1], mm = ddmmyy6[2];
-    const d = new Date(`${year}-${mm}-${dd}`);
-    if (!Number.isNaN(d.getTime())) return `${year}-${mm}-${dd}`;
+    return fmtDate(year, Number(ddmmyy6[2]), Number(ddmmyy6[1]));
   }
 
-  // JavaScript Date fallback
-  const iso = new Date(v);
-  if (!Number.isNaN(iso.getTime())) return iso.toISOString().slice(0, 10);
-
-  // Unable to parse — return null instead of crashing
+  // No format matched — return null instead of falling through to new Date()
   return null;
 }
 
@@ -204,11 +216,11 @@ export function parseOutstanding(xml) {
   if (!xml || !xml.trim()) return [];
 
   // Format 1: DSP-prefixed XML (from TYPE=Data reports like Bills Receivable/Payable)
-  // Structure: <DSPACCNAME><DSPDISPNAME>...</DSPDISPNAME></DSPACCNAME> + <DSPVOUCHER>...</DSPVOUCHER>
+  // Handles nested DSPACCNAME+DSPVOUCHER and flat sequential DSP tags
   const dspBills = parseDspOutstanding(xml);
   if (dspBills.length > 0) return dspBills;
 
-  // Format 2: BILLWISEDETAILS.LIST blocks (from COLLECTION-based responses)
+  // Format 2: BILLWISEDETAILS.LIST blocks (from COLLECTION/EXPORTDATA responses)
   const out = [];
   const firstLedgerTag = (xml.match(/<LEDGER[^>]*>/) || [''])[0];
   const partyName = readTag(xml, 'PARTYNAME') || readTag(xml, 'LEDGERNAME') || readAttr(firstLedgerTag, 'NAME');
@@ -220,16 +232,13 @@ export function parseOutstanding(xml) {
       const received = parseAmount(readTag(b, 'RECEIVED'));
       const billDate = parseTallyDate(readTag(b, 'BILLDATE') || readTag(b, 'DATE'));
       const dueDate = parseTallyDate(readTag(b, 'DUEDATE'));
-      const daysOverdue = dueDate && billDate
-        ? Math.max(0, Math.floor((Date.now() - new Date(dueDate).getTime()) / 86400000))
-        : 0;
       out.push({
         partyName,
         ledgerName: readTag(b, 'NAME') || partyName,
         billNo: readTag(b, 'NAME') || readTag(b, 'BILLNUMBER') || '',
         billDate,
         dueDate,
-        daysOverdue,
+        daysOverdue: computeDaysOverdue(dueDate),
         amount,
         received,
         balance: parseAmount(readTag(b, 'CLOSINGBALANCE')) || (amount - received),
@@ -240,7 +249,7 @@ export function parseOutstanding(xml) {
     return out;
   }
 
-  // Format 3: BILLALLOCATIONS blocks
+  // Format 3: BILLALLOCATIONS blocks (from voucher data)
   for (const block of splitBlocks(xml, 'BILLALLOCATIONS')) {
     const parent = block.match(/<PARENT>([^<]*)<\/PARENT>/i)
       || block.match(/<LEDGERNAME>([^<]*)<\/LEDGERNAME>/i);
@@ -249,6 +258,7 @@ export function parseOutstanding(xml) {
       billNo: readTag(block, 'BILLNAME'),
       billDate: parseTallyDate(readTag(block, 'BILLDATE')),
       dueDate: parseTallyDate(readTag(block, 'DUEBILLDATE')),
+      daysOverdue: computeDaysOverdue(parseTallyDate(readTag(block, 'DUEBILLDATE'))),
       amount: parseAmount(readTag(block, 'AMOUNT')),
       balance: parseAmount(readTag(block, 'BILLAMOUNT') || readTag(block, 'AMOUNT')),
       billType: readTag(block, 'OBJTYPE') || 'UNKNOWN',
@@ -259,80 +269,172 @@ export function parseOutstanding(xml) {
 }
 
 /**
- * Parse DSP-prefied outstanding XML from TYPE=Data reports.
+ * Extract ALL DSP-prefixed leaf tags with their positions in the XML.
+ * Returns array of { tag, value, pos } sorted by position.
+ *
+ * Three match patterns:
+ * 1. <DSPTAG>content</DSPTAG> — leaf tags with text content
+ * 2. <DSPTAG /> — self-closing tags
+ * 3. <DSPACCNAME> — opening tag only (used as party boundary marker)
+ */
+function extractDspTags(xml) {
+  const tags = [];
+  // Match: <DSPTAG>content</DSPTAG> OR <DSPTAG /> (self-closing) OR <DSPACCNAME> (opening only)
+  const re = /<(?!\/)(DSP[A-Z]+)(?:\s[^>]*)?>([^<]*)<\/\1>|<(?!\/)(DSP[A-Z]+)\s[^>]*\/>|<(?!\/)(DSPACCNAME)(?:\s[^>]*)?>/gi;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const tag = (m[1] || m[3] || m[4]).toUpperCase();
+    const value = decodeEntities((m[2] || '').trim());
+    tags.push({ tag, value, pos: m.index });
+  }
+  return tags;
+}
+
+/**
+ * Parse DSP-prefixed outstanding XML from TYPE=Data reports.
  * Handles Bills Receivable / Bills Payable report format.
  *
- * Structure:
- *   <DSPACCNAME><DSPDISPNAME>Ledger Name</DSPDISPNAME></DSPACCNAME>
- *   <DSPVOUCHER>
- *     <DSPVCHDATE>...</DSPVCHDATE>
- *     <DSPVCHTYPE>...</DSPVCHTYPE>
- *     <DSPVCHNO>...</DSPVCHNO>
- *     <DSPAMOUNT>...</DSPAMOUNT>
- *   </DSPVOUCHER>
+ * Tally DSP XML can appear in multiple structures:
  *
- * Or simpler flat structure:
- *   <DSPACCNAME><DSPDISPNAME>Party Name</DSPDISPNAME></DSPACCNAME>
- *   <DSPDISPNAME>Bill Ref</DSPDISPNAME>
- *   <DSPAMOUNT>Amount</DSPAMOUNT>
+ * 1. Nested: DSPACCNAME contains DSPVOUCHER children (with closing tags)
+ * 2. Flat sequential: DSPACCNAME, DSPDISPNAME, DSPAMOUNT as siblings (no closing tags)
+ * 3. Mixed: DSPACCNAME has closing tags but content is flat DSPDISPNAME/DSPAMOUNT pairs
+ *
+ * Strategy: Extract ALL DSP tags with positions, then use a state machine
+ * that handles all three structures uniformly.
  */
 function parseDspOutstanding(xml) {
+  const dspTags = extractDspTags(xml);
+  if (dspTags.length === 0) return [];
+  return parseDspFlatSequence(dspTags);
+}
+
+/** Compute days overdue from a due date string (ISO format). */
+function computeDaysOverdue(dueDate) {
+  if (!dueDate) return 0;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return 0;
+  const now = new Date();
+  return due < now ? Math.floor((now - due) / 86400000) : 0;
+}
+
+/**
+ * Parse flat sequential DSP tags into outstanding bills.
+ *
+ * Uses a state machine to track party markers (DSPACCNAME) and collect
+ * bill data (DSPDISPNAME, DSPAMOUNT, DSPCLRAMT, DSPBALANCE, dates).
+ * Handles DSPVOUCHER blocks when present.
+ *
+ * The key insight: DSPACCNAME signals a new party section.
+ * The DSPDISPNAME immediately after DSPACCNAME is the party name.
+ * Subsequent DSPDISPNAME tags are bill references.
+ */
+function parseDspFlatSequence(dspTags) {
   const out = [];
+  let currentParty = '';
+  let expectPartyName = false;
 
-  // Try to find DSPACCNAME blocks (each represents a ledger/party with bills)
-  const accBlocks = splitBlocks(xml, 'DSPACCNAME');
-  if (accBlocks.length === 0) return out;
+  let pendingBillRef = null;
+  let pendingAmount = null;
+  let pendingDate = null;
+  let pendingBalance = null;
+  let lastTag = '';
 
-  for (const accBlock of accBlocks) {
-    const partyName = readTag(accBlock, 'DSPDISPNAME') || readTag(accBlock, 'DSPACCNAME') || '';
-
-    // Look for voucher/bill blocks after this DSPACCNAME
-    // They may be in DSPVOUCHER or flat DSPDISPNAME/DSPAMOUNT pairs
-    const vchBlocks = readAll(accBlock, 'DSPVOUCHER');
-    if (vchBlocks.length > 0) {
-      for (const vch of vchBlocks) {
-        out.push({
-          partyName,
-          ledgerName: partyName,
-          billNo: readTag(vch, 'DSPVCHNO') || readTag(vch, 'DSPREF') || '',
-          billDate: parseTallyDate(readTag(vch, 'DSPVCHDATE') || readTag(vch, 'DSPDATE')),
-          dueDate: parseTallyDate(readTag(vch, 'DSPDUEDATE')),
-          daysOverdue: 0,
-          amount: parseAmount(readTag(vch, 'DSPAMOUNT') || readTag(vch, 'DSPCLRAMT')),
-          received: 0,
-          balance: parseAmount(readTag(vch, 'DSPBALANCE') || readTag(vch, 'DSPCLRAMT')),
-          billType: readTag(vch, 'DSPVCHTYPE') || 'Bill',
-          parent: '',
-        });
-      }
-    } else {
-      // Flat structure: look for DSPDISPNAME (bill ref) and DSPAMOUNT pairs
-      const dispNames = readAll(accBlock, 'DSPDISPNAME');
-      const amounts = readAll(accBlock, 'DSPAMOUNT');
-      const balances = readAll(accBlock, 'DSPCLRAMT');
-
-      for (let i = 0; i < Math.max(dispNames.length, amounts.length); i++) {
-        const billRef = readTag(dispNames[i] || '', 'DSPDISPNAME') || '';
-        const amt = parseAmount(readTag(amounts[i] || '', 'DSPAMOUNT') || readTag(balances[i] || '', 'DSPCLRAMT'));
-        if (billRef && amt !== 0) {
-          out.push({
-            partyName,
-            ledgerName: partyName,
-            billNo: billRef,
-            billDate: null,
-            dueDate: null,
-            daysOverdue: 0,
-            amount: Math.abs(amt),
-            received: 0,
-            balance: Math.abs(amt),
-            billType: 'Bill',
-            parent: '',
-          });
-        }
-      }
-    }
+  function flushBill() {
+    if (!currentParty || !pendingBillRef || pendingAmount === null || pendingAmount === 0) return;
+    const bal = pendingBalance !== null ? Math.abs(pendingBalance) : Math.abs(pendingAmount);
+    out.push({
+      partyName: currentParty,
+      ledgerName: currentParty,
+      billNo: pendingBillRef,
+      billDate: pendingDate,
+      dueDate: null,
+      daysOverdue: computeDaysOverdue(pendingDate),
+      amount: Math.abs(pendingAmount),
+      received: 0,
+      balance: bal,
+      billType: 'Bill',
+      parent: '',
+    });
+    pendingBillRef = null;
+    pendingAmount = null;
+    pendingDate = null;
+    pendingBalance = null;
   }
 
+  for (const { tag, value } of dspTags) {
+    switch (tag) {
+      case 'DSPACCNAME':
+        flushBill();
+        currentParty = value;
+        expectPartyName = true;
+        break;
+
+      case 'DSPDISPNAME':
+        if (expectPartyName) {
+          if (value) currentParty = value;
+          expectPartyName = false;
+        } else if (currentParty) {
+          flushBill();
+          pendingBillRef = value;
+        } else {
+          currentParty = value;
+        }
+        break;
+
+      case 'DSPVCHNO':
+      case 'DSPREF':
+        if (currentParty && value) {
+          flushBill();
+          pendingBillRef = value;
+        }
+        break;
+
+      case 'DSPAMOUNT':
+      case 'DSPCLRAMT': {
+        const amt = parseAmount(value);
+        if (amt !== 0) pendingAmount = amt;
+        break;
+      }
+
+      case 'DSPBALANCE':
+        pendingBalance = parseAmount(value);
+        break;
+
+      case 'DSPVCHDATE':
+      case 'DSPDATE': {
+        const parsed = parseTallyDate(value);
+        if (!parsed) break;
+        if (pendingBillRef && pendingAmount !== null) {
+          flushBill();
+          if (out.length > 0 && !out[out.length - 1].billDate) {
+            out[out.length - 1].billDate = parsed;
+            out[out.length - 1].daysOverdue = computeDaysOverdue(parsed);
+          } else {
+            pendingDate = parsed;
+          }
+        } else if (pendingBillRef) {
+          pendingDate = parsed;
+        } else if (
+          out.length > 0 &&
+          !out[out.length - 1].billDate &&
+          (lastTag === 'DSPAMOUNT' || lastTag === 'DSPCLRAMT')
+        ) {
+          out[out.length - 1].billDate = parsed;
+          out[out.length - 1].daysOverdue = computeDaysOverdue(parsed);
+        } else {
+          pendingDate = parsed;
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
+    lastTag = tag;
+  }
+
+  flushBill();
   return out;
 }
 
