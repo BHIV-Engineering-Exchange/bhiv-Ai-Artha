@@ -1,5 +1,60 @@
 import { useState, useCallback, useRef } from 'react';
 import { mitraService } from '../services';
+import { useAuthStore } from '../store/authStore';
+
+const MITRA_VERSION = '3.0.0';
+
+const buildPayload = (message, user) => {
+  const userId = user?._id || user?.id || 'anonymous';
+  return {
+    version: MITRA_VERSION,
+    input: { message },
+    context: {
+      platform: 'artha',
+      device: 'web',
+      session_id: `artha-${userId}-${Date.now()}`,
+      voice_input: false,
+      preferred_language: 'auto',
+      audio_output_requested: false,
+      age_gate_status: false,
+      user_context: {
+        source: 'artha',
+        user_id: userId,
+        user_name: user?.name || '',
+        user_role: user?.role || user?.roles?.[0] || 'viewer',
+      },
+    },
+  };
+};
+
+const extractReply = (res) => {
+  const d = res.data;
+  return (
+    d?.reply ||
+    d?.message ||
+    d?.data?.reply ||
+    d?.data?.message ||
+    d?.response ||
+    d?.data?.response ||
+    'No response from Mitra.'
+  );
+};
+
+const extractConfidence = (res) => {
+  return res.data?.confidence ?? res.data?.data?.confidence ?? null;
+};
+
+const extractIntent = (res) => {
+  return res.data?.intent ?? res.data?.data?.intent ?? null;
+};
+
+const extractEntities = (res) => {
+  return res.data?.entities ?? res.data?.data?.entities ?? null;
+};
+
+const extractCapability = (res) => {
+  return res.data?.capability_used ?? res.data?.data?.capability_used ?? null;
+};
 
 export const useMitra = () => {
   const [messages, setMessages] = useState([]);
@@ -7,6 +62,7 @@ export const useMitra = () => {
   const [error, setError] = useState(null);
   const [capabilities, setCapabilities] = useState(null);
   const abortRef = useRef(null);
+  const user = useAuthStore((s) => s.user);
 
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || loading) return null;
@@ -23,18 +79,17 @@ export const useMitra = () => {
     setError(null);
 
     try {
-      const res = await mitraService.chat(text.trim());
-      const data = res.data?.data;
+      const payload = buildPayload(text.trim(), user);
+      const res = await mitraService.chat(payload);
 
       const assistantMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: data?.reply || data?.message || 'No response from Mitra.',
-        confidence: data?.confidence,
-        intent: data?.intent,
-        entities: data?.entities,
-        capability_used: data?.capability_used,
-        role: data?.role,
+        content: extractReply(res),
+        confidence: extractConfidence(res),
+        intent: extractIntent(res),
+        entities: extractEntities(res),
+        capability_used: extractCapability(res),
         timestamp: new Date().toISOString(),
       };
 
@@ -57,79 +112,7 @@ export const useMitra = () => {
       setLoading(false);
       return fallbackMessage;
     }
-  }, [loading]);
-
-  const analyze = useCallback(async (query) => {
-    if (!query.trim()) return null;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await mitraService.analyze(query.trim());
-      setLoading(false);
-      return res.data?.data;
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Analysis failed.';
-      setError(errorMessage);
-      setLoading(false);
-      return null;
-    }
-  }, []);
-
-  const getInsights = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await mitraService.getInsights();
-      setLoading(false);
-      return res.data?.data;
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to get insights.');
-      setLoading(false);
-      return null;
-    }
-  }, []);
-
-  const analyzeStatement = useCallback(async (message, statementId) => {
-    if (!message.trim()) return null;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await mitraService.analyzeStatement(message.trim(), statementId);
-      const data = res.data?.data;
-
-      const assistantMessage = {
-        id: Date.now(),
-        role: 'assistant',
-        content: data?.reply || 'No analysis available.',
-        timestamp: new Date().toISOString(),
-        statement_analysis: true,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-      setLoading(false);
-      return data;
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Statement analysis failed.';
-      setError(errorMessage);
-      setLoading(false);
-      return null;
-    }
-  }, []);
-
-  const fetchCapabilities = useCallback(async () => {
-    try {
-      const res = await mitraService.getCapabilities();
-      setCapabilities(res.data?.data);
-      return res.data?.data;
-    } catch {
-      return null;
-    }
-  }, []);
+  }, [loading, user]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -146,10 +129,6 @@ export const useMitra = () => {
     error,
     capabilities,
     sendMessage,
-    analyze,
-    getInsights,
-    analyzeStatement,
-    fetchCapabilities,
     clearMessages,
     dismissError,
   };

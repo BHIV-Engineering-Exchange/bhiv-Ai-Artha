@@ -1,3 +1,4 @@
+import axios from 'axios';
 import api from './api';
 
 // Invoice Services
@@ -192,14 +193,22 @@ export const bankStatementService = {
   delete: (id) => api.delete(`/statements/${id}`),
 };
 
-// Mitra AI Services
+// Mitra AI Services — calls deployed Mitra directly
+const MITRA_BASE_URL = import.meta.env.VITE_MITRA_URL || 'https://mitra.blackholeinfiverse.com';
+const MITRA_API_KEY = import.meta.env.VITE_MITRA_API_KEY || '';
+
+const mitraClient = axios.create({
+  baseURL: MITRA_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+    ...(MITRA_API_KEY ? { 'X-API-Key': MITRA_API_KEY } : {}),
+  },
+});
+
 export const mitraService = {
-  chat: (message) => api.post('/mitra/chat', { message }),
-  analyze: (query) => api.post('/mitra/analyze', { query }),
-  getInsights: () => api.get('/mitra/insights'),
-  analyzeStatement: (message, statementId) => api.post('/mitra/analyze-statement', { message, statementId }),
-  getCapabilities: () => api.get('/mitra/capabilities'),
-  health: () => api.get('/mitra/health'),
+  chat: (payload) => mitraClient.post('/api/assistant', payload),
+  health: () => mitraClient.get('/api/health').catch(() => mitraClient.get('/health')),
 };
 
 // Niyantran Location Services
