@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
-import usePushNotifications from './hooks/usePushNotifications';
 
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/layout/Layout';
@@ -137,7 +136,6 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   const { checkAuth } = useAuthStore();
-  usePushNotifications();
 
   useEffect(() => {
     checkAuth();
