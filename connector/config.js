@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 /**
  * config — reads .env, validates required fields, exposes frozen config.
@@ -51,7 +51,7 @@ export function sha256(data) {
 
 /** HMAC-SHA256 hex of (message, secret). */
 export function hmac(secret, message) {
-  return createHash('sha256').update(message).update(secret).digest('hex');
+  return createHmac('sha256', secret).update(message).digest('hex');
 }
 
 export default load;

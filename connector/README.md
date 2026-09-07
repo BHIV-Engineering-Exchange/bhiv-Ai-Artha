@@ -3,9 +3,9 @@
 Secure bridge between the **local Bright Connection Tally** and the **deployed cloud ARTHA**.
 
 ```
-Local Tally (192.168.0.72:9000)
+Local Tally (127.0.0.1:9000)
     ↓ read-only XML fetch (Export Data envelopes only)
-Connector Agent (runs on any 192.168.0.x PC with internet)
+Connector Agent (runs on the Tally PC with internet)
     ↓ HTTPS + HMAC-SHA256 signed payload + API key
 Cloud ARTHA (https://artha.blackholeinfiverse.com)
     ↓ validates signature, upserts into MongoDB
@@ -27,7 +27,7 @@ ARTHA shows real Bright Connection data
 
 ### Prerequisites
 - Node.js 18+ installed
-- Network access to Tally (`192.168.0.72:9000`)
+- Network access to Tally (`127.0.0.1:9000`)
 - Internet access to cloud ARTHA (`artha.blackholeinfiverse.com`)
 
 ### Install
@@ -43,7 +43,7 @@ npm install
 ```bash
 cp .env.example .env
 # Edit .env with your values:
-#   TALLY_HOST=192.168.0.72
+#   TALLY_HOST=127.0.0.1
 #   TALLY_COMPANY=Bright Connection
 #   CLOUD_URL=https://artha.blackholeinfiverse.com
 #   CLOUD_API_KEY=<ask ARTHA admin>

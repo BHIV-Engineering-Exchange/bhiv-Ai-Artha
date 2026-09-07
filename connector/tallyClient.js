@@ -128,6 +128,10 @@ export function buildDataEnvelope({ reportId, fromDate, toDate, company }) {
     lines.push(`        <SVTODATE TYPE="Date">${escXml(toDate)}</SVTODATE>`);
   }
 
+  if (company) {
+    lines.push(`        <SVCURRENTCOMPANY>${escXml(company)}</SVCURRENTCOMPANY>`);
+  }
+
   lines.push(
     '      </STATICVARIABLES>',
     '    </DESC>',

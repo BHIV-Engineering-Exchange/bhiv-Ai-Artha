@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import logger from '../config/logger.js';
 import TallyParty from '../models/TallyParty.js';
 import TallyOutstanding from '../models/TallyOutstanding.js';
@@ -17,7 +17,7 @@ function sha256(data) {
 }
 
 function hmac(secret, message) {
-  return createHash('sha256').update(message).update(secret).digest('hex');
+  return createHmac('sha256', secret).update(message).digest('hex');
 }
 
 /** Timing-safe string comparison to prevent timing attacks. */
