@@ -39,6 +39,8 @@ function load() {
       intervalMs: Number(process.env.SYNC_INTERVAL_MINUTES || 15) * 60000,
       defaultBackfillDays: Number(process.env.SYNC_DEFAULT_BACKFILL_DAYS || 30),
       batchSize: Number(process.env.SYNC_BATCH_SIZE || 50),
+      fromDate: process.env.SYNC_FROM_DATE || '',
+      toDate: process.env.SYNC_TO_DATE || '',
     },
     tenantId: process.env.TALLY_TENANT_ID || 'tenant_bright_connection_001',
   });

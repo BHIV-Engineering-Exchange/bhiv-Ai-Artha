@@ -8,6 +8,7 @@
  *   node agent.js           # runs on interval (SYNC_INTERVAL_MINUTES)
  *   node agent.js --once    # single sync then exit
  *   node agent.js --status  # print config and exit
+ *   node agent.js --diagnose  # test Tally connectivity + show raw responses
  *   node agent.js --test-readonly  # test read-only guard then exit
  */
 import { randomUUID } from 'node:crypto';
@@ -418,6 +419,126 @@ async function syncDemo(config) {
   }
 }
 
+/**
+ * Diagnose Tally connectivity and data availability.
+ * Tests each XML request individually and shows raw responses.
+ */
+async function diagnose(config) {
+  const company = config.tally.company;
+  const base = `${config.tally.protocol}://${config.tally.host}:${config.tally.port}`;
+
+  log('info', '=== TALLY DIAGNOSTIC ===');
+  log('info', `Target:     ${base}`);
+  log('info', `Company:    "${company}"`);
+  log('info', `Timeout:    ${config.tally.timeoutMs}ms`);
+  log('info', '');
+
+  // Test 1: Basic connectivity
+  log('info', '--- Test 1: Basic connectivity ---');
+  try {
+    const testXml = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>EXPORT</TALLYREQUEST><TYPE>COLLECTION</TYPE><ID>List of Companies</ID></HEADER></ENVELOPE>';
+    const response = await fetchFromTally(config, testXml);
+    log('info', `  OK: ${Buffer.byteLength(response)} bytes received`);
+    if (response.length < 500) {
+      log('info', `  Response: ${response}`);
+    } else {
+      log('info', `  Response snippet: ${response.substring(0, 300)}...`);
+    }
+  } catch (err) {
+    log('error', `  FAILED: ${err.message}`);
+    log('error', '  → Tally is not reachable. Check:');
+    log('error', `    - Is Tally running on ${base}?`);
+    log('error', '    - Is ODBC enabled on this port?');
+    log('error', '    - Is the firewall blocking the connection?');
+    return;
+  }
+
+  // Test 2: Fetch ledgers with configured company
+  log('info', '');
+  log('info', '--- Test 2: Fetch ledgers (List of Ledgers) ---');
+  try {
+    const envelope = buildEnvelope({
+      headerId: 'List of Ledgers',
+      collectionType: 'List of Ledgers',
+      collectionId: 'Ledger',
+      company,
+    });
+    log('info', `  Request: ${Buffer.byteLength(envelope)} bytes`);
+    const response = await fetchFromTally(config, envelope);
+    log('info', `  Response: ${Buffer.byteLength(response)} bytes`);
+
+    if (response.length < 500) {
+      log('info', `  Full response: ${response}`);
+    } else {
+      log('info', `  Snippet (first 500 chars): ${response.substring(0, 500)}`);
+    }
+
+    const ledgers = parseLedgers(response);
+    log('info', `  Parsed: ${ledgers.length} ledgers`);
+    if (ledgers.length > 0) {
+      log('info', `  First 3: ${ledgers.slice(0, 3).map(l => l.name).join(', ')}`);
+    }
+
+    if (ledgers.length === 0) {
+      log('warn', '  → 0 ledgers found. Possible causes:');
+      log('warn', `    - Company name "${company}" may not match Tally exactly`);
+      log('warn', '    - Tally may not have any ledgers in this company');
+      log('warn', '    - The collection format may not match this TallyPrime version');
+    }
+  } catch (err) {
+    log('error', `  FAILED: ${err.message}`);
+  }
+
+  // Test 3: Bills Receivable
+  log('info', '');
+  log('info', '--- Test 3: Bills Receivable ---');
+  try {
+    const envelope = buildDataEnvelope({
+      reportId: 'Bills Receivable',
+      fromDate: config.sync.fromDate || '1-Apr-2024',
+      toDate: config.sync.toDate || '31-Mar-2025',
+      company,
+    });
+    const response = await fetchFromTally(config, envelope);
+    log('info', `  Response: ${Buffer.byteLength(response)} bytes`);
+    if (response.includes('Could not find') || response.includes('Error in TDL')) {
+      log('warn', `  → TDL error detected. Snippet: ${response.substring(0, 300)}`);
+    } else {
+      log('info', `  Snippet (first 300 chars): ${response.substring(0, 300)}`);
+    }
+    const bills = parseOutstanding(response);
+    log('info', `  Parsed: ${bills.length} bills`);
+  } catch (err) {
+    log('error', `  FAILED: ${err.message}`);
+  }
+
+  // Test 4: DayBook
+  log('info', '');
+  log('info', '--- Test 4: DayBook ---');
+  try {
+    const envelope = buildDataEnvelope({
+      reportId: 'DayBook',
+      fromDate: config.sync.fromDate || '1-Apr-2024',
+      toDate: config.sync.toDate || '31-Mar-2025',
+      company,
+    });
+    const response = await fetchFromTally(config, envelope);
+    log('info', `  Response: ${Buffer.byteLength(response)} bytes`);
+    if (response.includes('Could not find') || response.includes('Error in TDL')) {
+      log('warn', `  → TDL error detected. Snippet: ${response.substring(0, 300)}`);
+    } else {
+      log('info', `  Snippet (first 300 chars): ${response.substring(0, 300)}`);
+    }
+    const vouchers = parseVouchers(response);
+    log('info', `  Parsed: ${vouchers.length} vouchers`);
+  } catch (err) {
+    log('error', `  FAILED: ${err.message}`);
+  }
+
+  log('info', '');
+  log('info', '=== DIAGNOSTIC COMPLETE ===');
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -437,6 +558,12 @@ async function main() {
     log('info', `  Tenant:    ${config.tenantId}`);
     log('info', `  Interval:  ${config.sync.intervalMs / 60000}min`);
     log('info', `  Backfill:  ${config.sync.defaultBackfillDays} days`);
+    return;
+  }
+
+  // Diagnose mode: test Tally connectivity and show raw responses
+  if (args.includes('--diagnose')) {
+    await diagnose(config);
     return;
   }
 
