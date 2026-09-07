@@ -21,6 +21,8 @@ import {
   Radio,
   Database,
   Workflow,
+  Radar,
+  Camera,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -94,6 +96,17 @@ const menuItems = [
     icon: Radio,
     path: '/signals',
     roles: ['admin', 'accountant'],
+  },
+  {
+    title: 'Niyantran',
+    icon: Radar,
+    path: '/niyantran',
+  },
+  {
+    title: 'Storefront OCR',
+    icon: Camera,
+    path: '/dealers/storefront-ocr',
+    roles: ['admin', 'accountant', 'field_agent'],
   },
   {
     title: 'Statements',

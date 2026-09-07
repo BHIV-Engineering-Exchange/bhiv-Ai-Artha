@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Menu,
@@ -12,10 +12,13 @@ import {
   Shield,
   Calculator,
   Eye,
+  CheckCheck,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { notificationService } from '../../services/index';
 import { ThemeDropdown } from '../common/ThemeToggle';
 import clsx from 'clsx';
+import { formatDistanceToNow } from 'date-fns';
 
 const roleConfig = {
   admin: { label: 'Admin', color: 'bg-destructive/10 text-destructive', icon: Shield },
@@ -24,25 +27,82 @@ const roleConfig = {
   user: { label: 'User', color: 'bg-muted text-muted-foreground', icon: User },
 };
 
+const typeColors = {
+  info: 'text-blue-500',
+  success: 'text-green-500',
+  warning: 'text-amber-500',
+  error: 'text-red-500',
+  location: 'text-purple-500',
+  payment: 'text-emerald-500',
+  overdue: 'text-orange-500',
+  system: 'text-gray-500',
+};
+
 const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
   const displayRole = user?.role || user?.roles?.[0] || 'user';
   const displayInitial = displayName.charAt(0).toUpperCase();
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const [notifRes, countRes] = await Promise.all([
+        notificationService.getAll({ limit: 10, unreadOnly: false }),
+        notificationService.getUnreadCount(),
+      ]);
+      setNotifications(notifRes.data?.data || notifRes.data || []);
+      setUnreadCount(countRes.data?.count || 0);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const handleMarkRead = async (id) => {
+    try {
+      await notificationService.markRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all read:', err);
+    }
+  };
+
   const handleLogout = () => {
     logout();
   };
 
-  const notifications = [
-    { id: 1, title: 'Invoice #INV-001 paid', time: '2 hours ago', unread: true },
-    { id: 2, title: 'New expense pending approval', time: '5 hours ago', unread: true },
-    { id: 3, title: 'GST filing reminder', time: '1 day ago', unread: false },
-  ];
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 h-18 backdrop-blur-2xl border-b transition-all duration-300 bg-background/75 border-border/40">
@@ -85,7 +145,11 @@ const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
               className="relative p-2.5 hover:bg-muted rounded-xl transition-all duration-300"
             >
               <Bell className="w-5 h-5 text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full animate-pulse"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {showNotifications && (
@@ -94,26 +158,64 @@ const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
                   className="fixed inset-0 z-10"
                   onClick={() => setShowNotifications(false)}
                 />
-                <div className="absolute right-0 mt-2 w-80 bg-card rounded-xl shadow-xl border border-border/50 z-20 animate-fade-in">
-                  <div className="px-4 py-3 border-b border-border/50">
+                <div className="absolute right-0 mt-2 w-96 bg-card rounded-xl shadow-xl border border-border/50 z-20 animate-fade-in">
+                  <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
                     <h3 className="font-semibold text-foreground font-display">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+                      </button>
+                    )}
                   </div>
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={clsx(
-                          'px-4 py-3 hover:bg-muted cursor-pointer border-b border-border/30 last:border-0 transition-colors duration-200',
-                          notification.unread && 'bg-primary/5'
-                        )}
-                      >
-                        <p className="text-sm text-foreground">{notification.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                        No notifications yet
                       </div>
-                    ))}
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif._id || notif.id}
+                          onClick={() => !notif.isRead && handleMarkRead(notif._id)}
+                          className={clsx(
+                            'px-4 py-3 hover:bg-muted cursor-pointer border-b border-border/30 last:border-0 transition-colors duration-200',
+                            !notif.isRead && 'bg-primary/5'
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            {!notif.isRead && (
+                              <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-foreground font-medium truncate">{notif.title}</p>
+                              {notif.body && (
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={clsx('text-[10px] font-medium uppercase', typeColors[notif.type] || 'text-gray-500')}>
+                                  {notif.type || 'info'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatTime(notif.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                   <div className="px-4 py-3 border-t border-border/50">
-                    <button className="text-sm text-primary hover:text-primary/80 font-medium transition-colors duration-200">
+                    <button
+                      onClick={() => {
+                        setShowNotifications(false);
+                        navigate('/notifications');
+                      }}
+                      className="text-sm text-primary hover:text-primary/80 font-medium transition-colors duration-200"
+                    >
                       View all notifications
                     </button>
                   </div>

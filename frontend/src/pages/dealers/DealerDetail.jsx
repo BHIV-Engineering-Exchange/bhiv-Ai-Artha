@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Phone, Mail, IndianRupee, Clock, FileText, Edit } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, IndianRupee, Clock, FileText, Edit, Receipt } from 'lucide-react';
 import { PageHeader, Card, Button, Badge, Loading } from '../../components/common';
 import api from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -39,6 +39,7 @@ const DealerDetail = () => {
         action={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => navigate('/dealers')} icon={ArrowLeft}>Back</Button>
+            <Button variant="outline" onClick={() => navigate(`/dealers/${id}/statement`)} icon={Receipt}>Statement</Button>
             <Button onClick={() => navigate(`/dealers/${id}/edit`)} icon={Edit}>Edit</Button>
           </div>
         }

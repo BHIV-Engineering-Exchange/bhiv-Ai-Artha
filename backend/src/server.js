@@ -87,6 +87,7 @@ import niyantranRoutes from './routes/niyantran.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import dealerRoutes from './routes/dealer.routes.js';
 import salesAgentRoutes from './routes/salesAgent.routes.js';
+import storefrontRoutes from './routes/storefront.routes.js';
 import observabilityService from './services/observability.service.js';
 import bankingService from './services/banking.service.js';
 import auditService from './services/audit.service.js';
@@ -336,6 +337,7 @@ app.use('/api/v1/niyantran', niyantranRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/dealers', dealerRoutes);
 app.use('/api/v1/sales-agents', salesAgentRoutes);
+app.use('/api/v1/storefront', storefrontRoutes);
 
 // SETU callback webhook endpoint (delegated to setuDispatch service)
 // Protected by HMAC signature verification for external webhook security

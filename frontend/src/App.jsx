@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import usePushNotifications from './hooks/usePushNotifications';
 
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/layout/Layout';
@@ -44,6 +45,8 @@ import DataIngestion from './pages/ingestion/DataIngestion';
 import NiyantranLocation from './pages/niyantran/NiyantranLocation';
 import DealerList from './pages/dealers/DealerList';
 import DealerDetail from './pages/dealers/DealerDetail';
+import StorefrontOCR from './pages/dealers/StorefrontOCR';
+import StoreAccountStatement from './pages/dealers/StoreAccountStatement';
 import SalesAgentList from './pages/agents/SalesAgentList';
 import SalesAgentDetail from './pages/agents/SalesAgentDetail';
 
@@ -134,6 +137,7 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   const { checkAuth } = useAuthStore();
+  usePushNotifications();
 
   useEffect(() => {
     checkAuth();
@@ -186,6 +190,8 @@ function App() {
           <Route path="/dealers/new" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerList /></RoleProtectedRoute>} />
           <Route path="/dealers/:id" element={<DealerDetail />} />
           <Route path="/dealers/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin', 'accountant']}><DealerDetail /></RoleProtectedRoute>} />
+          <Route path="/dealers/storefront-ocr" element={<StorefrontOCR />} />
+          <Route path="/dealers/:id/statement" element={<StoreAccountStatement />} />
           <Route path="/agents" element={<SalesAgentList />} />
           <Route path="/agents/new" element={<RoleProtectedRoute allowedRoles={['admin']}><SalesAgentList /></RoleProtectedRoute>} />
           <Route path="/agents/:id" element={<SalesAgentDetail />} />
