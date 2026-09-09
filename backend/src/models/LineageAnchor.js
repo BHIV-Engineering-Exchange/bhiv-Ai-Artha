@@ -91,6 +91,5 @@ const lineageAnchorSchema = new mongoose.Schema({
 
 lineageAnchorSchema.index({ trace_id: 1, entity_type: 1, entity_id: 1 });
 lineageAnchorSchema.index({ anchor_type: 1, created_at: -1 });
-lineageAnchorSchema.index({ parent_lineage_id: 1 });
 
 export default mongoose.model('LineageAnchor', lineageAnchorSchema);

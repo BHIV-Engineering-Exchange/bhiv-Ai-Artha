@@ -43,6 +43,7 @@ const complianceValidationLogSchema = new mongoose.Schema({
   errors: [validationErrorSchema],
 }, {
   timestamps: true,
+  suppressReservedKeysWarning: true,
 });
 
 complianceValidationLogSchema.index({ filingType: 1, 'period.year': 1, 'period.month': 1 });

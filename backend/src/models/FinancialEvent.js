@@ -117,7 +117,6 @@ const financialEventSchema = new mongoose.Schema({
 financialEventSchema.index({ aggregate_id: 1, timestamp: 1 });
 financialEventSchema.index({ event_type: 1, timestamp: -1 });
 financialEventSchema.index({ trace_id: 1, event_type: 1 });
-financialEventSchema.index({ chain_position: 1 });
 
 financialEventSchema.statics.SCHEMA_VERSION = SCHEMA_VERSION;
 

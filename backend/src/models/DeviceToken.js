@@ -38,7 +38,6 @@ const deviceTokenSchema = new mongoose.Schema({
 });
 
 deviceTokenSchema.index({ agentId: 1, isActive: 1 });
-deviceTokenSchema.index({ token: 1 }, { unique: true });
 
 deviceTokenSchema.set('toJSON', { virtuals: true });
 

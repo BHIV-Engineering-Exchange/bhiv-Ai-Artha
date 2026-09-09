@@ -155,7 +155,6 @@ paymentSchema.index({ entityType: 1, entityId: 1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ paymentMethod: 1, status: 1 });
 paymentSchema.index({ reconciled: 1 });
-paymentSchema.index({ traceId: 1 });
 
 paymentSchema.pre('save', async function(next) {
   if (this.isNew && !this.paymentReference) {

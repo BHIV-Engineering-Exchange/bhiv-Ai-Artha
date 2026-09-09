@@ -99,7 +99,6 @@ const visitSchema = new mongoose.Schema({
 
 visitSchema.index({ agentId: 1, createdAt: -1 });
 visitSchema.index({ dealerId: 1, createdAt: -1 });
-visitSchema.index({ status: 1 });
 visitSchema.index({ completedAt: -1 });
 
 visitSchema.set('toJSON', { virtuals: true });

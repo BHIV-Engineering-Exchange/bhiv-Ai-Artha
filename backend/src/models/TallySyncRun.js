@@ -45,6 +45,7 @@ const tallySyncRunSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
+  suppressReservedKeysWarning: true,
 });
 
 tallySyncRunSchema.index({ tenantId: 1, status: 1, startedAt: -1 });

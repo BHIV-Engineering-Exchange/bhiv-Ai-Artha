@@ -24,6 +24,7 @@ const tdsValidationLogSchema = new mongoose.Schema({
   errors: [tdsValidationErrorSchema],
 }, {
   timestamps: true,
+  suppressReservedKeysWarning: true,
 });
 
 tdsValidationLogSchema.index({ quarter: 1, financialYear: 1 });

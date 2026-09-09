@@ -94,7 +94,6 @@ const complianceSignalSchema = new mongoose.Schema({
 });
 
 complianceSignalSchema.index({ type: 1, severity: 1, created_at: -1 });
-complianceSignalSchema.index({ dispatch_status: 1 });
 complianceSignalSchema.index({ next_retry_at: 1 });
 complianceSignalSchema.index({ setu_reference: 1 });
 

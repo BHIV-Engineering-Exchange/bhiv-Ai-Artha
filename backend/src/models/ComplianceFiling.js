@@ -104,7 +104,6 @@ const complianceFilingSchema = new mongoose.Schema({
 
 complianceFilingSchema.index({ filingType: 1, 'period.year': 1, 'period.month': 1 });
 complianceFilingSchema.index({ gstin: 1, tan: 1 });
-complianceFilingSchema.index({ submission_status: 1 });
 complianceFilingSchema.index({ traceId: 1, submission_status: 1 });
 
 export default mongoose.model('ComplianceFiling', complianceFilingSchema);
