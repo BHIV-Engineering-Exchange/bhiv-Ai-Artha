@@ -98,6 +98,13 @@ class DealerService {
       ],
     }).lean();
 
+    // Default location from env vars — used when creating new dealers from Tally
+    const defaultLat = parseFloat(process.env.DEMO_DEFAULT_LAT) || null;
+    const defaultLng = parseFloat(process.env.DEMO_DEFAULT_LNG) || null;
+    const defaultCity = process.env.DEMO_DEFAULT_CITY || '';
+    const defaultState = process.env.DEMO_DEFAULT_STATE || '';
+    const defaultRegion = process.env.DEMO_DEFAULT_REGION || defaultCity || '';
+
     let created = 0;
     let updated = 0;
 
@@ -110,9 +117,20 @@ class DealerService {
         await existing.save();
         updated++;
       } else {
+        // Spread default coordinates so dealer appears on Niyantran map.
+        // Individual dealers can be re-positioned later via PUT /dealers/:id/location.
+        const jitterLat = defaultLat ? defaultLat + (Math.random() - 0.5) * 0.02 : null;
+        const jitterLng = defaultLng ? defaultLng + (Math.random() - 0.5) * 0.02 : null;
+
         await Dealer.create({
           name: party.name,
           displayName: party.name,
+          address: party.address || '',
+          city: defaultCity,
+          state: defaultState,
+          latitude: jitterLat,
+          longitude: jitterLng,
+          region: defaultRegion,
           group: party.group || 'Sundry Debtors',
           parent: party.parent || 'Sundry Debtors',
           gstin: party.gstin || '',
@@ -191,6 +209,38 @@ class DealerService {
       byRegion: regionStats,
       topOverdue,
     };
+  }
+
+  async updateDealerLocation(id, { latitude, longitude, address, city, region, area }) {
+    const update = {};
+    if (latitude !== undefined) update.latitude = latitude;
+    if (longitude !== undefined) update.longitude = longitude;
+    if (address !== undefined) update.address = address;
+    if (city !== undefined) update.city = city;
+    if (region !== undefined) update.region = region;
+    if (area !== undefined) update.area = area;
+    return Dealer.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+  }
+
+  async bulkUpdateLocations(locations) {
+    let updated = 0;
+    for (const loc of locations) {
+      if (!loc.dealerId) continue;
+      const result = await Dealer.findByIdAndUpdate(
+        loc.dealerId,
+        {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          ...(loc.address && { address: loc.address }),
+          ...(loc.city && { city: loc.city }),
+          ...(loc.region && { region: loc.region }),
+          ...(loc.area && { area: loc.area }),
+        },
+        { new: true }
+      );
+      if (result) updated++;
+    }
+    return { updated };
   }
 
   async getRegions() {

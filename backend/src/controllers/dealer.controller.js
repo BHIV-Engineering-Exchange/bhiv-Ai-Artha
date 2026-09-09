@@ -115,3 +115,31 @@ export const getCities = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const updateDealerLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, address, city, region, area } = req.body;
+    if (latitude == null || longitude == null) {
+      return res.status(400).json({ success: false, message: 'latitude and longitude are required' });
+    }
+    const dealer = await dealerService.updateDealerLocation(req.params.id, { latitude, longitude, address, city, region, area });
+    res.json({ success: true, data: dealer });
+  } catch (error) {
+    logger.error('Update dealer location error:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const bulkUpdateLocations = async (req, res) => {
+  try {
+    const { locations } = req.body;
+    if (!Array.isArray(locations) || locations.length === 0) {
+      return res.status(400).json({ success: false, message: 'locations array is required' });
+    }
+    const result = await dealerService.bulkUpdateLocations(locations);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error('Bulk update locations error:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
