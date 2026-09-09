@@ -122,7 +122,7 @@ const NotificationsPage = () => {
       <PageHeader
         title="Notifications"
         description={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
-        backTo="/dashboard"
+        backUrl="/dashboard"
       >
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
@@ -158,7 +158,7 @@ const NotificationsPage = () => {
         <Loading />
       ) : filtered.length === 0 ? (
         <EmptyState
-          icon={<Bell className="w-12 h-12" />}
+          icon={Bell}
           title="No notifications"
           description="You're all caught up!"
         />
