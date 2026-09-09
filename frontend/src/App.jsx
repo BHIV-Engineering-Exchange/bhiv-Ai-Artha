@@ -52,6 +52,8 @@ import SalesAgentDetail from './pages/agents/SalesAgentDetail';
 import CompanySettings from './pages/settings/CompanySettings';
 import UserManagement from './pages/settings/UserManagement';
 
+import NotificationsPage from './pages/notifications/NotificationsPage';
+
 const LazyLoad = ({ children }) => (
   <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
     {children}
@@ -206,6 +208,8 @@ function App() {
 
           <Route path="/settings/company" element={<RoleProtectedRoute allowedRoles={['admin']}><CompanySettings /></RoleProtectedRoute>} />
           <Route path="/settings/users" element={<RoleProtectedRoute allowedRoles={['admin']}><UserManagement /></RoleProtectedRoute>} />
+
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

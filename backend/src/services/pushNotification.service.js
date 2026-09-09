@@ -152,9 +152,8 @@ class PushNotificationService {
     });
   }
 
-  async getNotifications(agentId, { page = 1, limit = 20, unreadOnly = false, type, category } = {}) {
+  async getNotifications({ page = 1, limit = 20, unreadOnly = false, type, category } = {}) {
     const query = {};
-    if (agentId) query.recipientId = agentId;
     if (unreadOnly) query.isRead = false;
     if (type) query.type = type;
     if (category) query.category = category;
@@ -172,23 +171,23 @@ class PushNotificationService {
     };
   }
 
-  async markRead(notificationId, agentId) {
-    const update = { isRead: true, readAt: new Date() };
-    const query = { _id: notificationId };
-    if (agentId) query.recipientId = agentId;
-    return Notification.findOneAndUpdate(query, update, { new: true });
+  async markRead(notificationId) {
+    return Notification.findOneAndUpdate(
+      { _id: notificationId },
+      { isRead: true, readAt: new Date() },
+      { new: true }
+    );
   }
 
-  async markAllRead(agentId) {
-    const query = { isRead: false };
-    if (agentId) query.recipientId = agentId;
-    return Notification.updateMany(query, { isRead: true, readAt: new Date() });
+  async markAllRead() {
+    return Notification.updateMany(
+      { isRead: false },
+      { isRead: true, readAt: new Date() }
+    );
   }
 
-  async getUnreadCount(agentId) {
-    const query = { isRead: false };
-    if (agentId) query.recipientId = agentId;
-    return Notification.countDocuments(query);
+  async getUnreadCount() {
+    return Notification.countDocuments({ isRead: false });
   }
 
   async registerDeviceToken(agentId, agentName, token, platform, deviceId) {

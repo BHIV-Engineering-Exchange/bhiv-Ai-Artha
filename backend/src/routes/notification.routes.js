@@ -19,8 +19,8 @@ router.post('/send', authorize('admin', 'accountant'), sendNotification);
 router.post('/send-bulk', authorize('admin'), sendBulkNotification);
 router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
-router.put('/:id/read', markRead);
 router.put('/read-all', markAllRead);
+router.put('/:id/read', markRead);
 router.post('/device-token', registerDeviceToken);
 router.delete('/device-token/:token', removeDeviceToken);
 

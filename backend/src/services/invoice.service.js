@@ -11,6 +11,7 @@ import { calculateGSTBreakdown, buildGSTValidationError } from './gstEngine.serv
 import auditService from './audit.service.js';
 import evidenceAutomationService from './evidenceAutomation.service.js';
 import tantraService from './tantra.service.js';
+import notificationEvent from './notificationEvent.service.js';
 
 class InvoiceService {
   /**
@@ -59,7 +60,9 @@ class InvoiceService {
       });
       
       logger.info(`Invoice created: ${invoice.invoiceNumber}`);
-      
+
+      notificationEvent.invoiceCreated(invoice).catch(() => {});
+
       return invoice;
     } catch (error) {
       logger.error('Create invoice error:', error);
@@ -316,7 +319,9 @@ class InvoiceService {
       });
       
       logger.info(`Payment recorded for invoice: ${invoice.invoiceNumber}`);
-      
+
+      notificationEvent.invoicePayment(invoice, paymentAmount, paymentData.paymentMethod).catch(() => {});
+
       return invoice;
     });
   }
@@ -591,7 +596,9 @@ class InvoiceService {
       });
       
       logger.info(`Invoice sent: ${invoice.invoiceNumber}`);
-      
+
+      notificationEvent.invoiceSent(invoice).catch(() => {});
+
       return invoice;
     });
   }
@@ -736,7 +743,9 @@ class InvoiceService {
       });
       
       logger.info(`Invoice cancelled: ${invoice.invoiceNumber}`);
-      
+
+      notificationEvent.invoiceCancelled(invoice, reason).catch(() => {});
+
       return invoice;
     });
   }

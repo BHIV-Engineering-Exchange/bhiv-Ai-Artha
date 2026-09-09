@@ -13,6 +13,7 @@ import { calculateGSTBreakdown, buildGSTValidationError } from './gstEngine.serv
 import auditService from './audit.service.js';
 import evidenceAutomationService from './evidenceAutomation.service.js';
 import tantraService from './tantra.service.js';
+import notificationEvent from './notificationEvent.service.js';
 
 class ExpenseService {
   /**
@@ -114,7 +115,9 @@ class ExpenseService {
       });
       
       logger.info(`Expense created: ${expense.expenseNumber}`);
-      
+
+      notificationEvent.expenseCreated(expense).catch(() => {});
+
       return expense;
     } catch (error) {
       logger.error('Create expense error:', error);
@@ -312,6 +315,8 @@ class ExpenseService {
     
     logger.info(`Expense approved: ${expense.expenseNumber}`);
 
+    notificationEvent.expenseApproved(expense).catch(() => {});
+
     let autoRecordWarning = null;
     try {
       await this.recordExpense(expenseId, userId);
@@ -348,7 +353,9 @@ class ExpenseService {
     await expense.save();
     
     logger.info(`Expense rejected: ${expense.expenseNumber}`);
-    
+
+    notificationEvent.expenseRejected(expense, reason).catch(() => {});
+
     return expense;
   }
   
@@ -642,7 +649,9 @@ class ExpenseService {
       });
       
       logger.info(`Expense recorded: ${expense.expenseNumber}`);
-      
+
+      notificationEvent.expenseRecorded(expense).catch(() => {});
+
       return expense;
     });
   }

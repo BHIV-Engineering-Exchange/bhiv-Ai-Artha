@@ -34,7 +34,7 @@
     { "prefix": "/api/v1/governance", "capability": "ARTHA-OBSERVE-001" },
     { "prefix": "/api/v1/financial-runtime", "capability": "ARTHA-OBSERVE-001" },
     { "prefix": "/api/v1/niyantran", "capability": "ARTHA-LEDGER-001" },
-    { "prefix": "/api/v1/notifications", "capability": "ARTHA-OBSERVE-001" },
+    { "prefix": "/api/v1/notifications", "capability": "ARTHA-LEDGER-001" },
     { "prefix": "/api/v1/dealers", "capability": "ARTHA-LEDGER-001" },
     { "prefix": "/api/v1/sales-agents", "capability": "ARTHA-LEDGER-001" },
     { "prefix": "/health", "capability": "ARTHA-OBSERVE-001" },

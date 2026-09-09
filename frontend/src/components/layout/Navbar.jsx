@@ -83,6 +83,16 @@ const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
     }
   };
 
+  const handleNotificationClick = async (notif) => {
+    if (!notif.isRead) {
+      await handleMarkRead(notif._id);
+    }
+    if (notif.link) {
+      setShowNotifications(false);
+      navigate(notif.link);
+    }
+  };
+
   const handleMarkAllRead = async () => {
     try {
       await notificationService.markAllRead();
@@ -181,7 +191,7 @@ const Navbar = ({ onToggleSidebar, onMobileMenuClick }) => {
                       notifications.map((notif) => (
                         <div
                           key={notif._id || notif.id}
-                          onClick={() => !notif.isRead && handleMarkRead(notif._id)}
+                          onClick={() => handleNotificationClick(notif)}
                           className={clsx(
                             'px-4 py-3 hover:bg-muted cursor-pointer border-b border-border/30 last:border-0 transition-colors duration-200',
                             !notif.isRead && 'bg-primary/5'

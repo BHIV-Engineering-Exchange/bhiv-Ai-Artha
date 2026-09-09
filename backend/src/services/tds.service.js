@@ -8,6 +8,7 @@ import logger from '../config/logger.js';
 import auditService from './audit.service.js';
 import evidenceAutomationService from './evidenceAutomation.service.js';
 import tantraService from './tantra.service.js';
+import notificationEvent from './notificationEvent.service.js';
 
 class TDSService {
   /**
@@ -117,7 +118,9 @@ class TDSService {
       });
       
       logger.info(`TDS entry created: ${tdsEntry.entryNumber}`);
-      
+
+      notificationEvent.tdsEntryCreated(tdsEntry).catch(() => {});
+
       return tdsEntry;
     } catch (error) {
       logger.error('Create TDS entry error:', error);
@@ -266,7 +269,9 @@ class TDSService {
       });
       
       logger.info(`TDS deduction recorded: ${tdsEntry.entryNumber}`);
-      
+
+      notificationEvent.tdsDeducted(tdsEntry).catch(() => {});
+
       return tdsEntry;
     } catch (error) {
       await session.abortTransaction();

@@ -6,6 +6,7 @@ import TallyVoucher from '../models/TallyVoucher.js';
 import Counter from '../models/Counter.js';
 import ledgerService from './ledger.service.js';
 import logger from '../config/logger.js';
+import notificationEvent from './notificationEvent.service.js';
 
 /**
  * tallyToArthaBridge — converts Tally voucher/party/outstanding data into
@@ -420,5 +421,8 @@ export async function bridgeTallyRecords(records, tenantId, company) {
   }
 
   logger.info(`[TALLY-BRIDGE] Completed: ${results.sales} sales, ${results.receipt} receipts, ${results.payment} payments, ${results.journal} journals, ${results.skipped} skipped, ${results.errors} errors`);
+
+  notificationEvent.tallySyncComplete(results).catch(() => {});
+
   return results;
 }

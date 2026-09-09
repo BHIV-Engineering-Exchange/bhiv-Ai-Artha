@@ -3,6 +3,7 @@ import TallyParty from '../models/TallyParty.js';
 import TallyOutstanding from '../models/TallyOutstanding.js';
 import TallyVoucher from '../models/TallyVoucher.js';
 import logger from '../config/logger.js';
+import notificationEvent from './notificationEvent.service.js';
 
 class DealerService {
   async createDealer(data) {
@@ -144,6 +145,9 @@ class DealerService {
     }
 
     logger.info(`Dealer sync from Tally: ${created} created, ${updated} updated`);
+
+    notificationEvent.dealerSyncComplete(created, updated).catch(() => {});
+
     return { created, updated, total: tallyParties.length };
   }
 

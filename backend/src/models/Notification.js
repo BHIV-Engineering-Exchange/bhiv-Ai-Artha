@@ -62,6 +62,10 @@ const notificationSchema = new mongoose.Schema({
     enum: ['low', 'normal', 'high', 'urgent'],
     default: 'normal',
   },
+  link: {
+    type: String,
+    default: null,
+  },
   expiresAt: {
     type: Date,
     default: null,

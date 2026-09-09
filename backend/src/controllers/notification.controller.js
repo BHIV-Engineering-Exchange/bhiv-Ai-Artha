@@ -25,8 +25,7 @@ export const sendBulkNotification = async (req, res) => {
 export const getNotifications = async (req, res) => {
   try {
     const { page, limit, unreadOnly, type, category } = req.query;
-    const agentId = req.query.agentId || req.user?._id;
-    const result = await pushNotificationService.getNotifications(agentId, {
+    const result = await pushNotificationService.getNotifications({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 20,
       unreadOnly: unreadOnly === 'true',
@@ -42,7 +41,7 @@ export const getNotifications = async (req, res) => {
 
 export const markRead = async (req, res) => {
   try {
-    const notification = await pushNotificationService.markRead(req.params.id, req.user?._id);
+    const notification = await pushNotificationService.markRead(req.params.id);
     res.json({ success: true, data: notification });
   } catch (error) {
     logger.error('Mark read error:', error);
@@ -52,7 +51,7 @@ export const markRead = async (req, res) => {
 
 export const markAllRead = async (req, res) => {
   try {
-    await pushNotificationService.markAllRead(req.user?._id);
+    await pushNotificationService.markAllRead();
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
     logger.error('Mark all read error:', error);
@@ -62,7 +61,7 @@ export const markAllRead = async (req, res) => {
 
 export const getUnreadCount = async (req, res) => {
   try {
-    const count = await pushNotificationService.getUnreadCount(req.user?._id);
+    const count = await pushNotificationService.getUnreadCount();
     res.json({ success: true, data: { count } });
   } catch (error) {
     logger.error('Get unread count error:', error);

@@ -4,6 +4,7 @@ import SalesAgent from '../models/SalesAgent.js';
 import Dealer from '../models/Dealer.js';
 import Visit from '../models/Visit.js';
 import logger from '../config/logger.js';
+import notificationEvent from './notificationEvent.service.js';
 
 class NiyantranService {
   constructor() {
@@ -179,6 +180,8 @@ class NiyantranService {
       });
     }
 
+    notificationEvent.agentCheckIn(agent.name, dealer?.name || 'Unknown').catch(() => {});
+
     return visit;
   }
 
@@ -191,6 +194,10 @@ class NiyantranService {
     if (outcome) visit.outcome = outcome;
     if (notes) visit.notes = notes;
     await visit.save();
+
+    const agent = await SalesAgent.findById(visit.agentId).select('name');
+    const dealer = visit.dealerId ? await Dealer.findById(visit.dealerId).select('name') : null;
+    notificationEvent.agentCheckOut(agent?.name || 'Agent', dealer?.name || 'Unknown', outcome).catch(() => {});
 
     return visit;
   }
