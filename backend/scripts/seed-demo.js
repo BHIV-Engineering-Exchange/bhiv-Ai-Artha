@@ -15,34 +15,50 @@ import Notification from '../src/models/Notification.js';
 import User from '../src/models/User.js';
 import logger from '../src/config/logger.js';
 
-// Bright Connection Delhi/NCR demo data
+// ─── Configurable Location Defaults ──────────────────────────────────
+// Set these in backend/.env to seed data for your own city/region.
+// If not set, defaults to Mumbai.
+const DEFAULT_LAT = parseFloat(process.env.DEMO_DEFAULT_LAT) || 19.0760;
+const DEFAULT_LNG = parseFloat(process.env.DEMO_DEFAULT_LNG) || 72.8777;
+const DEFAULT_CITY = process.env.DEMO_DEFAULT_CITY || 'Mumbai';
+const DEFAULT_STATE = process.env.DEMO_DEFAULT_STATE || 'Maharashtra';
+const DEFAULT_PINCODE_PREFIX = process.env.DEMO_DEFAULT_PINCODE_PREFIX || '4000';
+const DEFAULT_COUNTRY = process.env.DEMO_DEFAULT_COUNTRY || 'India';
+
+// Generate random offset from center (within ~5km radius)
+function randomOffset(rangeKm = 0.05) {
+  return (Math.random() - 0.5) * rangeKm * 2;
+}
+
+// Build dealer data using configured center point
 const DEMO_DEALERS = [
-  { name: 'Sharma Electronics', city: 'Delhi', region: 'North Delhi', area: 'Karol Bagh', lat: 28.6519, lng: 77.1898, outstanding: 245000, overdue: 85000, phone: '9810123456', gstin: '07AABCS1234F1Z5' },
-  { name: 'Gupta Traders', city: 'Delhi', region: 'North Delhi', area: 'Rohini', lat: 28.7498, lng: 77.0654, outstanding: 178000, overdue: 0, phone: '9810234567', gstin: '07AABCG5678G1Z3' },
-  { name: 'Patel & Sons', city: 'Gurgaon', region: 'Gurgaon', area: 'Sohna Road', lat: 28.4595, lng: 77.0266, outstanding: 312000, overdue: 112000, phone: '9810345678', gstin: '06AABCP9012H1Z1' },
-  { name: 'Mehta Brothers', city: 'Gurgaon', region: 'Gurgaon', area: 'DLF Phase 3', lat: 28.4949, lng: 77.0883, outstanding: 89000, overdue: 0, phone: '9810456789', gstin: '06AABCM3456J1Z8' },
-  { name: 'Kumar Enterprises', city: 'Noida', region: 'Noida-Ghaziabad', area: 'Sector 62', lat: 28.6270, lng: 77.3710, outstanding: 456000, overdue: 200000, phone: '9810567890', gstin: '09AABCK7890K1Z6' },
-  { name: 'Agarwal & Co', city: 'Noida', region: 'Noida-Ghaziabad', area: 'Sector 18', lat: 28.5733, lng: 77.3240, outstanding: 134000, overdue: 34000, phone: '9810678901', gstin: '09AABCA2345L1Z4' },
-  { name: 'Singh Trading Co', city: 'Faridabad', region: 'Faridabad', area: 'NIT', lat: 28.4089, lng: 77.3178, outstanding: 67000, overdue: 0, phone: '9810789012', gstin: '06AABCJ6789M1Z2' },
-  { name: 'Reddy Industries', city: 'Faridabad', region: 'Faridabad', area: 'Ballabgarh', lat: 28.3360, lng: 77.3140, outstanding: 201000, overdue: 101000, phone: '9810890123', gstin: '06AABCR0123N1Z0' },
-  { name: 'Jain Hardware', city: 'Delhi', region: 'South Delhi', area: 'Lajpat Nagar', lat: 28.5677, lng: 77.2405, outstanding: 156000, overdue: 56000, phone: '9810901234', gstin: '07AABCJ4567P1Z8' },
-  { name: 'Verma Sales Corp', city: 'Delhi', region: 'South Delhi', area: 'Nehru Place', lat: 28.5491, lng: 77.2530, outstanding: 289000, overdue: 0, phone: '9811012345', gstin: '07AABCV8901Q1Z6' },
-  { name: 'Bansal Mart', city: 'Ghaziabad', region: 'Noida-Ghaziabad', area: 'Kaushambi', lat: 28.6380, lng: 77.3230, outstanding: 98000, overdue: 28000, phone: '9811123456', gstin: '09AABCB2345R1Z4' },
-  { name: 'Tiwari Electronics', city: 'Delhi', region: 'East Delhi', area: 'Preet Vihar', lat: 28.6428, lng: 77.2971, outstanding: 175000, overdue: 75000, phone: '9811234567', gstin: '07AABCT6789S1Z2' },
+  { name: 'Sharma Electronics', area: 'Main Market', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 245000, overdue: 85000, phone: '9810123456', gstin: '27AABCS1234F1Z5' },
+  { name: 'Gupta Traders', area: 'Industrial Area', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 178000, overdue: 0, phone: '9810234567', gstin: '27AABCG5678G1Z3' },
+  { name: 'Patel & Sons', area: 'Commerce Center', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 312000, overdue: 112000, phone: '9810345678', gstin: '27AABCP9012H1Z1' },
+  { name: 'Mehta Brothers', area: 'Business District', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 89000, overdue: 0, phone: '9810456789', gstin: '27AABCM3456J1Z8' },
+  { name: 'Kumar Enterprises', area: 'Trade Center', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 456000, overdue: 200000, phone: '9810567890', gstin: '27AABCK7890K1Z6' },
+  { name: 'Agarwal & Co', area: 'Station Road', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 134000, overdue: 34000, phone: '9810678901', gstin: '27AABCA2345L1Z4' },
+  { name: 'Singh Trading Co', area: 'Ring Road', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 67000, overdue: 0, phone: '9810789012', gstin: '27AABCJ6789M1Z2' },
+  { name: 'Reddy Industries', area: ' MG Road', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 201000, overdue: 101000, phone: '9810890123', gstin: '27AABCR0123N1Z0' },
+  { name: 'Jain Hardware', area: 'City Center', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 156000, overdue: 56000, phone: '9810901234', gstin: '27AABCJ4567P1Z8' },
+  { name: 'Verma Sales Corp', area: 'Market Road', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 289000, overdue: 0, phone: '9811012345', gstin: '27AABCV8901Q1Z6' },
+  { name: 'Bansal Mart', area: 'Nehru Nagar', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 98000, overdue: 28000, phone: '9811123456', gstin: '27AABCB2345R1Z4' },
+  { name: 'Tiwari Electronics', area: 'Gandhi Road', lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset(), outstanding: 175000, overdue: 75000, phone: '9811234567', gstin: '27AABCT6789S1Z2' },
 ];
 
 const DEMO_AGENTS = [
-  { name: 'Rajesh Kumar', role: 'sales-executive', region: 'North Delhi', area: 'Karol Bagh-Rohini', phone: '9800100001', target: 500000, achieved: 340000, lat: 28.6700, lng: 77.1800 },
-  { name: 'Amit Singh', role: 'sales-executive', region: 'Gurgaon', area: 'Sohna-DLF', phone: '9800100002', target: 600000, achieved: 450000, lat: 28.4700, lng: 77.0500 },
-  { name: 'Priya Sharma', role: 'field-agent', region: 'Noida-Ghaziabad', area: 'Sector 62-Kaushambi', phone: '9800100003', target: 400000, achieved: 220000, lat: 28.6100, lng: 77.3500 },
-  { name: 'Vikram Patel', role: 'sales-executive', region: 'Faridabad', area: 'NIT-Ballabgarh', phone: '9800100004', target: 350000, achieved: 180000, lat: 28.3900, lng: 77.3100 },
-  { name: 'Deepak Gupta', role: 'sales-manager', region: 'South Delhi', area: 'Lajpat-Nehru', phone: '9800100005', target: 800000, achieved: 620000, lat: 28.5500, lng: 77.2400 },
+  { name: 'Rajesh Kumar', role: 'sales-executive', area: 'Zone A', phone: '9800100001', target: 500000, achieved: 340000, lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset() },
+  { name: 'Amit Singh', role: 'sales-executive', area: 'Zone B', phone: '9800100002', target: 600000, achieved: 450000, lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset() },
+  { name: 'Priya Sharma', role: 'field-agent', area: 'Zone C', phone: '9800100003', target: 400000, achieved: 220000, lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset() },
+  { name: 'Vikram Patel', role: 'sales-executive', area: 'Zone D', phone: '9800100004', target: 350000, achieved: 180000, lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset() },
+  { name: 'Deepak Gupta', role: 'sales-manager', area: 'All Zones', phone: '9800100005', target: 800000, achieved: 620000, lat: DEFAULT_LAT + randomOffset(), lng: DEFAULT_LNG + randomOffset() },
 ];
 
 async function seed() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     logger.info('Connected to MongoDB for demo seed');
+    logger.info(`Seeding demo data for: ${DEFAULT_CITY}, ${DEFAULT_STATE} (lat: ${DEFAULT_LAT}, lng: ${DEFAULT_LNG})`);
 
     // Clear old demo data
     await Dealer.deleteMany({});
@@ -76,13 +92,13 @@ async function seed() {
         contactPerson: `Owner - ${d.name}`,
         phone: d.phone,
         email: `info@${d.name.toLowerCase().replace(/[^a-z]/g, '')}.in`,
-        address: `${d.area}, ${d.city}`,
-        city: d.city,
-        state: 'Delhi',
-        pincode: '1100' + String(Math.floor(Math.random() * 90) + 10),
+        address: `${d.area}, ${DEFAULT_CITY}`,
+        city: DEFAULT_CITY,
+        state: DEFAULT_STATE,
+        pincode: DEFAULT_PINCODE_PREFIX + String(Math.floor(Math.random() * 90) + 10),
         latitude: d.lat,
         longitude: d.lng,
-        region: d.region,
+        region: DEFAULT_CITY,
         area: d.area,
         gstin: d.gstin,
         creditLimit: 500000,
@@ -113,7 +129,7 @@ async function seed() {
         phone: a.phone,
         email: `${a.name.toLowerCase().replace(/[^a-z]/g, '')}@brightconnection.in`,
         role: a.role,
-        region: a.region,
+        region: DEFAULT_CITY,
         area: a.area,
         assignedDealers: assignedDealerIds,
         isActive: true,
@@ -122,7 +138,7 @@ async function seed() {
           latitude: a.lat,
           longitude: a.lng,
           timestamp: new Date(Date.now() - Math.floor(Math.random() * 30) * 60000),
-          address: `${a.area}, ${a.region}`,
+          address: `${a.area}, ${DEFAULT_CITY}`,
         },
         totalVisits: Math.floor(Math.random() * 50) + 10,
         totalSales: a.achieved,
@@ -163,7 +179,7 @@ async function seed() {
           networkType: ['4g', '5g', 'wifi'][Math.floor(Math.random() * 3)],
           deviceId: `DEMO-DEVICE-${agent.agentCode}`,
           devicePlatform: 'android',
-          address: `${agent.area}, ${agent.region}`,
+          address: `${agent.area}, ${DEFAULT_CITY}`,
           nearbyDealer: nearestDealer._id,
           isAtDealer: j < 2,
           source: 'niyantran-app',
@@ -192,7 +208,7 @@ async function seed() {
             time: new Date(now - hoursAgo * 3600000),
             latitude: dealer.latitude + (Math.random() - 0.5) * 0.001,
             longitude: dealer.longitude + (Math.random() - 0.5) * 0.001,
-            address: `${dealer.area}, ${dealer.city}`,
+            address: `${dealer.area}, ${DEFAULT_CITY}`,
           },
           checkOut: {
             time: new Date(now - (hoursAgo - 1) * 3600000),
@@ -222,7 +238,7 @@ async function seed() {
             time: new Date(now - 45 * 60000),
             latitude: dealer.latitude,
             longitude: dealer.longitude,
-            address: `${dealer.area}, ${dealer.city}`,
+            address: `${dealer.area}, ${DEFAULT_CITY}`,
           },
           purpose: 'Delivery follow-up',
           notes: 'Scheduled delivery confirmation',
@@ -233,11 +249,11 @@ async function seed() {
 
     // Create notifications
     const notifMessages = [
-      { title: 'Payment Received', body: 'Sharma Electronics paid Rs 50,000', type: 'payment', category: 'finance' },
-      { title: 'Visit Completed', body: 'Rajesh Kumar completed visit to Gupta Traders', type: 'visit', category: 'niyantran' },
-      { title: 'Overdue Alert', body: 'Kumar Enterprises - Rs 2,00,000 overdue by 15 days', type: 'overdue', category: 'crm' },
-      { title: 'New Order', body: 'Patel & Sons placed order for Rs 75,000', type: 'info', category: 'crm' },
-      { title: 'Agent Check-in', body: 'Amit Singh checked in at DLF Phase 3', type: 'location', category: 'niyantran' },
+      { title: 'Payment Received', body: `${DEMO_DEALERS[0].name} paid Rs 50,000`, type: 'payment', category: 'finance' },
+      { title: 'Visit Completed', body: `${DEMO_AGENTS[0].name} completed visit to ${DEMO_DEALERS[1].name}`, type: 'visit', category: 'niyantran' },
+      { title: 'Overdue Alert', body: `${DEMO_DEALERS[4].name} - Rs 2,00,000 overdue by 15 days`, type: 'overdue', category: 'crm' },
+      { title: 'New Order', body: `${DEMO_DEALERS[2].name} placed order for Rs 75,000`, type: 'info', category: 'crm' },
+      { title: 'Agent Check-in', body: `${DEMO_AGENTS[1].name} checked in at ${DEMO_DEALERS[3].area}`, type: 'location', category: 'niyantran' },
     ];
     for (let i = 0; i < notifMessages.length; i++) {
       await Notification.create({
@@ -258,6 +274,8 @@ async function seed() {
     console.log('\n========================================');
     console.log('  DEMO DATA SEEDED SUCCESSFULLY');
     console.log('========================================');
+    console.log(`  Location:         ${DEFAULT_CITY}, ${DEFAULT_STATE}`);
+    console.log(`  Coordinates:      ${DEFAULT_LAT}, ${DEFAULT_LNG}`);
     console.log(`  Dealers:          ${dealerCount}`);
     console.log(`  Sales Agents:     ${agentCount}`);
     console.log(`  Location Pings:   ${pingCount}`);
