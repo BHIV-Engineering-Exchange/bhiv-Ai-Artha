@@ -1,25 +1,29 @@
 /**
  * demoData — generates mock Bright Connection Tally data for demo mode.
- * No Tally required. Produces realistic Delhi/NCR dealer data.
+ * No Tally required. Produces realistic Mumbai dealer data.
  */
 
 const DEALERS = [
-  { name: 'Sharma Electronics', group: 'Sundry Debtors', closing: 245000, opening: 180000, gstin: '07AABCS1234F1Z5', pan: 'AABCS1234F' },
-  { name: 'Gupta Traders', group: 'Sundry Debtors', closing: 178000, opening: 150000, gstin: '07AABCG5678G1Z3', pan: 'AABCG5678G' },
-  { name: 'Patel & Sons', group: 'Sundry Debtors', closing: 312000, opening: 200000, gstin: '06AABCP9012H1Z1', pan: 'AABCP9012H' },
-  { name: 'Mehta Brothers', group: 'Sundry Debtors', closing: 89000, opening: 120000, gstin: '06AABCM3456J1Z8', pan: 'AABCM3456J' },
-  { name: 'Kumar Enterprises', group: 'Sundry Debtors', closing: 456000, opening: 300000, gstin: '09AABCK7890K1Z6', pan: 'AABCK7890K' },
-  { name: 'Agarwal & Co', group: 'Sundry Debtors', closing: 134000, opening: 95000, gstin: '09AABCA2345L1Z4', pan: 'AABCA2345L' },
-  { name: 'Singh Trading Co', group: 'Sundry Debtors', closing: 67000, opening: 80000, gstin: '06AABCJ6789M1Z2', pan: 'AABCJ6789M' },
-  { name: 'Reddy Industries', group: 'Sundry Debtors', closing: 201000, opening: 150000, gstin: '06AABCR0123N1Z0', pan: 'AABCR0123N' },
-  { name: 'Jain Hardware', group: 'Sundry Debtors', closing: 156000, opening: 110000, gstin: '07AABCJ4567P1Z8', pan: 'AABCJ4567P' },
-  { name: 'Verma Sales Corp', group: 'Sundry Debtors', closing: 289000, opening: 220000, gstin: '07AABCV8901Q1Z6', pan: 'AABCV8901Q' },
-  { name: 'Bansal Mart', group: 'Sundry Debtors', closing: 98000, opening: 75000, gstin: '09AABCB2345R1Z4', pan: 'AABCB2345R' },
-  { name: 'Tiwari Electronics', group: 'Sundry Debtors', closing: 175000, opening: 130000, gstin: '07AABCT6789S1Z2', pan: 'AABCT6789S' },
+  // --- Mumbai Dealers (Sundry Debtors) ---
+  { name: 'Andheri Electronics Hub', group: 'Sundry Debtors', closing: 345000, opening: 220000, gstin: '27AABCA1234F1Z5', pan: 'AABCA1234F', area: 'Andheri West' },
+  { name: 'Bandra Trading Co', group: 'Sundry Debtors', closing: 278000, opening: 190000, gstin: '27AABCB5678G1Z3', pan: 'AABCB5678G', area: 'Bandra East' },
+  { name: 'Churchgate Stationers', group: 'Sundry Debtors', closing: 412000, opening: 280000, gstin: '27AABCC9012H1Z1', pan: 'AABCC9012H', area: 'Churchgate' },
+  { name: 'Dadar Hardware Mart', group: 'Sundry Debtors', closing: 189000, opening: 150000, gstin: '27AABCD3456J1Z8', pan: 'AABCD3456J', area: 'Dadar West' },
+  { name: 'Fort Financial Services', group: 'Sundry Debtors', closing: 556000, opening: 400000, gstin: '27AABCE7890K1Z6', pan: 'AABCE7890K', area: 'Fort' },
+  { name: 'Juhu Retail Paradise', group: 'Sundry Debtors', closing: 167000, opening: 120000, gstin: '27AABCF2345L1Z4', pan: 'AABCF2345L', area: 'Juhu' },
+  { name: 'Kurla Wholesale Depot', group: 'Sundry Debtors', closing: 398000, opening: 290000, gstin: '27AABCG6789M1Z2', pan: 'AABCG6789M', area: 'Kurla West' },
+  { name: 'Lower Parel Office Solutions', group: 'Sundry Debtors', closing: 234000, opening: 175000, gstin: '27AABCH0123N1Z0', pan: 'AABCH0123N', area: 'Lower Parel' },
+  { name: 'Malad Stationery World', group: 'Sundry Debtors', closing: 145000, opening: 98000, gstin: '27AABCI4567P1Z8', pan: 'AABCI4567P', area: 'Malad West' },
+  { name: 'Powai Tech Supplies', group: 'Sundry Debtors', closing: 312000, opening: 245000, gstin: '27AABCJ8901Q1Z6', pan: 'AABCJ8901Q', area: 'Powai' },
+
+  // --- Mumbai Agent (Sundry Creditors) ---
+  { name: 'Rajesh Menon - Andheri Agent', group: 'Sundry Creditors', closing: 85000, opening: 60000, gstin: '27AABCK2345R1Z4', pan: 'AABCK2345R', area: 'Andheri East' },
+
+  // --- Company Accounts (unchanged) ---
   { name: 'Bright Connection Capital', group: 'Capital Account', closing: 5000000, opening: 5000000, gstin: '', pan: '' },
   { name: 'Sales Account', group: 'Sales Accounts', closing: 12500000, opening: 0, gstin: '', pan: '' },
   { name: 'Purchase Account', group: 'Purchase Accounts', closing: 8200000, opening: 0, gstin: '', pan: '' },
-  { name: 'SBI Bank Account', group: 'Bank Accounts', closing: 3200000, opening: 2800000, gstin: '', pan: '' },
+  { name: 'HDFC Bank Account', group: 'Bank Accounts', closing: 3200000, opening: 2800000, gstin: '', pan: '' },
   { name: 'Cash-in-Hand', group: 'Cash-in-Hand', closing: 450000, opening: 380000, gstin: '', pan: '' },
   { name: 'GST Output CGST', group: 'Duties & Taxes', closing: 450000, opening: 0, gstin: '', pan: '' },
   { name: 'GST Output SGST', group: 'Duties & Taxes', closing: 450000, opening: 0, gstin: '', pan: '' },
@@ -28,14 +32,14 @@ const DEALERS = [
 
 const VOUCHER_TYPES = ['Sales', 'Receipt', 'Payment', 'Journal'];
 const NARRATIONS = [
-  'Being goods sold to dealer',
+  'Being goods sold to Mumbai dealer',
   'Cash received against invoice',
-  'Payment made to supplier',
+  'Payment made to local supplier',
   'Journal entry for adjustment',
   'Being GST payment for the month',
   'Salary payment for the month',
-  'Office rent payment',
-  'Electricity bill payment',
+  'Office rent payment - Mumbai office',
+  'Electricity bill payment - Andheri warehouse',
 ];
 
 function randomAmount(min, max) {
@@ -96,11 +100,12 @@ export function generateDemoVouchers() {
   const vouchers = [];
   let voucherNum = 1000;
 
-  // Generate 30 vouchers over last 30 days
+  // Generate 30 vouchers over last 30 days (only from Mumbai dealers)
+  const mumbaiDealers = DEALERS.filter(d => d.group === 'Sundry Debtors');
   for (let i = 0; i < 30; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-    const dealer = DEALERS[Math.floor(Math.random() * 12)];
+    const dealer = mumbaiDealers[Math.floor(Math.random() * mumbaiDealers.length)];
     const type = VOUCHER_TYPES[Math.floor(Math.random() * VOUCHER_TYPES.length)];
     const amount = randomAmount(5000, 200000);
 

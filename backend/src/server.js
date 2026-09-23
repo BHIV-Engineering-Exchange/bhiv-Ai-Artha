@@ -103,6 +103,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// Reconfigure services that depend on env vars loaded after module imports
+const pushNotificationService = (await import('./services/pushNotification.service.js')).default;
+await pushNotificationService.reconfigure();
+
 const { SPA_URL, API_PUBLIC_URL } = getResolvedUrls();
 
 if (process.env.NODE_ENV === 'production') {
@@ -302,6 +306,105 @@ app.get('/api/v1/auth/me', protect, (req, res) => {
 app.get('/logout', (req, res) => {
   clearBlackholeCookie(res);
   return res.redirect(`${SPA_URL}/login`);
+});
+
+/** Public push subscription endpoint — no auth required (service worker registers before auth). */
+app.post('/api/v1/push/subscribe', async (req, res) => {
+  try {
+    const { subscription, userAgent } = req.body;
+    if (!subscription) {
+      return res.status(400).json({ success: false, message: 'Missing subscription' });
+    }
+    const pushNotificationService = (await import('./services/pushNotification.service.js')).default;
+    const device = await pushNotificationService.registerWebPushSubscription(subscription, userAgent);
+    res.json({ success: true, data: { deviceId: device._id } });
+  } catch (err) {
+    logger.error('Push subscribe error:', err);
+    res.status(500).json({ success: false, message: 'Subscription failed' });
+  }
+});
+
+app.post('/api/v1/push/unsubscribe', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Missing token' });
+    }
+    const pushNotificationService = (await import('./services/pushNotification.service.js')).default;
+    await pushNotificationService.removeDeviceToken(token);
+    res.json({ success: true, message: 'Unsubscribed' });
+  } catch (err) {
+    logger.error('Push unsubscribe error:', err);
+    res.status(500).json({ success: false, message: 'Unsubscribe failed' });
+  }
+});
+
+app.get('/api/v1/push/vapid-key', (req, res) => {
+  const key = process.env.VAPID_PUBLIC_KEY || '';
+  res.json({ success: true, data: { publicKey: key } });
+});
+
+/** Push diagnostic status — check if push pipeline is healthy */
+app.get('/api/v1/push/status', async (req, res) => {
+  try {
+    const pushNotificationService = (await import('./services/pushNotification.service.js')).default;
+    const DeviceToken = (await import('./models/DeviceToken.js')).default;
+    const Notification = (await import('./models/Notification.js')).default;
+
+    const totalTokens = await DeviceToken.countDocuments({ isActive: true, platform: 'web' });
+    const totalNotifications = await Notification.countDocuments();
+    const pushedNotifications = await Notification.countDocuments({ isPushed: true });
+
+    res.json({
+      success: true,
+      data: {
+        webPushAvailable: pushNotificationService.webPushAvailable,
+        vapidPublicKeySet: !!process.env.VAPID_PUBLIC_KEY,
+        vapidPrivateKeySet: !!process.env.VAPID_PRIVATE_KEY,
+        activeWebSubscriptions: totalTokens,
+        totalNotifications,
+        pushedNotifications,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** Test push notification — sends a test notification to all subscribers */
+app.post('/api/v1/push/test', async (req, res) => {
+  try {
+    const pushNotificationService = (await import('./services/pushNotification.service.js')).default;
+
+    if (!pushNotificationService.webPushAvailable) {
+      return res.json({
+        success: false,
+        message: 'web-push not available. Check VAPID keys in .env',
+        webPushAvailable: false,
+        vapidPublicKey: !!process.env.VAPID_PUBLIC_KEY,
+        vapidPrivateKey: !!process.env.VAPID_PRIVATE_KEY,
+      });
+    }
+
+    const notification = await pushNotificationService.sendNotification({
+      title: 'Test Notification',
+      body: 'Push notifications are working! You will receive alerts for invoices, payments, and more.',
+      type: 'system',
+      category: 'system',
+      priority: 'normal',
+    });
+
+    res.json({
+      success: true,
+      message: 'Test notification sent',
+      notificationId: notification._id,
+      isPushed: notification.isPushed,
+      pushError: notification.pushError,
+    });
+  } catch (err) {
+    logger.error('Push test error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 app.use('/api/v1/ledger', ledgerRoutes);

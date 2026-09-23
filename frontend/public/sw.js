@@ -1,9 +1,16 @@
+const CACHE_NAME = 'artha-notifications-v1';
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      self.registration?.backgroundSync?.register('artha-notifications'),
+    ]).catch(() => {})
+  );
 });
 
 self.addEventListener('push', (event) => {
@@ -21,10 +28,19 @@ self.addEventListener('push', (event) => {
     icon: '/arthA.png',
     badge: '/arthA.png',
     vibrate: [200, 100, 200],
-    tag: data.tag || 'artha-notification',
+    tag: data.tag || `artha-${data.type || 'notification'}-${Date.now()}`,
     renotify: true,
-    data: data.data || {},
-    actions: data.actions || [],
+    requireInteraction: data.priority === 'urgent' || data.priority === 'high',
+    data: {
+      url: data.link || data.data?.link || '/dashboard',
+      notificationId: data.notificationId || null,
+      type: data.type || 'info',
+      ...data.data,
+    },
+    actions: [
+      { action: 'open', title: 'Open' },
+      { action: 'dismiss', title: 'Dismiss' },
+    ],
   };
 
   event.waitUntil(
@@ -35,17 +51,25 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
+  if (event.action === 'dismiss') return;
+
   const url = event.notification.data?.url || '/dashboard';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(url);
-          return client.focus();
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.navigate(url);
+            return client.focus();
+          }
         }
-      }
-      return clients.openWindow(url);
-    })
+        return clients.openWindow(url);
+      })
   );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  // Track dismissal if needed
 });

@@ -184,7 +184,7 @@ class MitraService {
   _getClient() {
     if (this._client) return this._client;
 
-    const baseURL = process.env.MITRA_API_URL || 'https://bhiv-mitra.onrender.com';
+    const baseURL = process.env.MITRA_API_URL || 'https://mitra.blackholeinfiverse.com';
     const apiKey = process.env.MITRA_API_KEY || '';
     const timeout = parseInt(process.env.MITRA_TIMEOUT_MS || '30000', 10);
 
@@ -273,30 +273,6 @@ class MitraService {
       AccountBalance.find({}).populate('account', 'code name type').lean()
     );
 
-    queries.push(
-      JournalEntry.aggregate([
-        { $match: { status: { $in: ['POSTED', 'posted'] }, date: { $gte: firstDayOfYear, $lte: today } } },
-        { $unwind: '$lines' },
-        { $lookup: { from: 'chartofaccounts', localField: 'lines.account', foreignField: '_id', as: 'accountInfo' } },
-        { $unwind: { path: '$accountInfo', preserveNullAndEmptyArrays: true } },
-        { $match: { 'accountInfo.type': 'Income' } },
-        { $group: { _id: '$accountInfo.name', total: { $sum: { $toDouble: '$lines.credit' } } } },
-        { $sort: { total: -1 } },
-      ])
-    );
-
-    queries.push(
-      JournalEntry.aggregate([
-        { $match: { status: { $in: ['POSTED', 'posted'] }, date: { $gte: firstDayOfYear, $lte: today } } },
-        { $unwind: '$lines' },
-        { $lookup: { from: 'chartofaccounts', localField: 'lines.account', foreignField: '_id', as: 'accountInfo' } },
-        { $unwind: { path: '$accountInfo', preserveNullAndEmptyArrays: true } },
-        { $match: { 'accountInfo.type': 'Expense' } },
-        { $group: { _id: '$accountInfo.name', total: { $sum: { $toDouble: '$lines.debit' } } } },
-        { $sort: { total: -1 } },
-      ])
-    );
-
     if (this.hasCapability(role, 'gst.view')) {
       queries.push(
         JournalEntry.aggregate([
@@ -334,12 +310,14 @@ class MitraService {
 
     const [
       journalEntries, invoices, expenses, balances,
-      incomeAccounts, expenseAccounts, gstSummary,
-      tdsEntries, statements,
+      gstSummary, tdsEntries, statements,
     ] = results.map(safe);
 
-    const totalIncome = incomeAccounts.reduce((s, a) => s + (a.total || 0), 0);
-    const totalExpenses = expenseAccounts.reduce((s, a) => s + (a.total || 0), 0);
+    const incomeAccounts = balances.filter(b => b.account?.type === 'Income');
+    const expenseAccounts = balances.filter(b => b.account?.type === 'Expense');
+
+    const totalIncome = Math.abs(incomeAccounts.reduce((s, a) => s + (a.balance || 0), 0));
+    const totalExpenses = Math.abs(expenseAccounts.reduce((s, a) => s + (a.balance || 0), 0));
 
     return {
       current_date: today.toISOString().split('T')[0],
@@ -354,6 +332,11 @@ class MitraService {
       recent_journal_entries: journalEntries.map(e => ({
         entry_number: e.entryNumber, date: e.date,
         description: e.description, status: e.status, source: e.source,
+        lines: e.lines?.map(l => ({
+          account: l.account?.toString?.() || l.account,
+          debit: l.debit,
+          credit: l.credit,
+        })),
       })),
       recent_invoices: invoices.map(inv => ({
         invoice_number: inv.invoiceNumber, date: inv.invoiceDate,
@@ -363,13 +346,13 @@ class MitraService {
       recent_expenses: expenses.map(exp => ({
         expense_number: exp.expenseNumber, date: exp.date,
         vendor: exp.vendor, category: exp.category,
-        amount: exp.totalAmount, status: exp.status,
+        amount: exp.totalAmount || exp.amount, status: exp.status,
       })),
       account_balances: balances
         .filter(b => b.account)
         .map(b => ({ code: b.account.code, name: b.account.name, type: b.account.type, balance: b.balance })),
-      income_by_account: incomeAccounts.map(a => ({ name: a._id, total: a.total })),
-      expenses_by_account: expenseAccounts.map(a => ({ name: a._id, total: a.total })),
+      income_by_account: incomeAccounts.map(a => ({ name: a.account.name, total: Math.abs(a.balance || 0) })),
+      expenses_by_account: expenseAccounts.map(a => ({ name: a.account.name, total: Math.abs(a.balance || 0) })),
       gst_summary: gstSummary.map(g => ({ type: g._id, total: g.total })),
       tds_entries: tdsEntries.map(t => ({
         section: t.section, payment: t.paymentAmount,
@@ -422,7 +405,10 @@ class MitraService {
   _buildPayload(message, userId, extra) {
     return {
       version: '3.0.0',
-      input: { message },
+      input: {
+        message,
+        summarized_payload: extra?._financial_context || undefined,
+      },
       context: {
         platform: 'artha',
         device: 'api',
@@ -435,6 +421,12 @@ class MitraService {
           source: 'artha',
           user_id: userId,
           ...extra,
+        },
+        authenticated_user_context: {
+          user_id: userId,
+          user_name: extra?.user_name || 'User',
+          user_role: extra?.user_role || 'viewer',
+          platform: 'artha',
         },
       },
     };
@@ -475,33 +467,17 @@ class MitraService {
   }
 
   async getRevenue() {
-    const firstDayOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const income = await JournalEntry.aggregate([
-      { $match: { status: { $in: ['POSTED', 'posted'] }, date: { $gte: firstDayOfYear } } },
-      { $unwind: '$lines' },
-      { $lookup: { from: 'chartofaccounts', localField: 'lines.account', foreignField: '_id', as: 'accountInfo' } },
-      { $unwind: { path: '$accountInfo', preserveNullAndEmptyArrays: true } },
-      { $match: { 'accountInfo.type': 'Income' } },
-      { $group: { _id: '$accountInfo.name', total: { $sum: { $toDouble: '$lines.credit' } } } },
-      { $sort: { total: -1 } },
-    ]);
-    const total = income.reduce((s, a) => s + (a.total || 0), 0);
-    return { total, breakdown: income.map(a => ({ account: a._id, amount: a.total })) };
+    const balances = await AccountBalance.find({}).populate('account', 'code name type').lean();
+    const incomeAccounts = balances.filter(b => b.account?.type === 'Income');
+    const total = Math.abs(incomeAccounts.reduce((s, a) => s + (a.balance || 0), 0));
+    return { total, breakdown: incomeAccounts.map(a => ({ account: a.account.name, amount: Math.abs(a.balance || 0) })) };
   }
 
   async getExpenses() {
-    const firstDayOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const expenses = await JournalEntry.aggregate([
-      { $match: { status: { $in: ['POSTED', 'posted'] }, date: { $gte: firstDayOfYear } } },
-      { $unwind: '$lines' },
-      { $lookup: { from: 'chartofaccounts', localField: 'lines.account', foreignField: '_id', as: 'accountInfo' } },
-      { $unwind: { path: '$accountInfo', preserveNullAndEmptyArrays: true } },
-      { $match: { 'accountInfo.type': 'Expense' } },
-      { $group: { _id: '$accountInfo.name', total: { $sum: { $toDouble: '$lines.debit' } } } },
-      { $sort: { total: -1 } },
-    ]);
-    const total = expenses.reduce((s, a) => s + (a.total || 0), 0);
-    return { total, breakdown: expenses.map(a => ({ account: a._id, amount: a.total })) };
+    const balances = await AccountBalance.find({}).populate('account', 'code name type').lean();
+    const expenseAccounts = balances.filter(b => b.account?.type === 'Expense');
+    const total = Math.abs(expenseAccounts.reduce((s, a) => s + (a.balance || 0), 0));
+    return { total, breakdown: expenseAccounts.map(a => ({ account: a.account.name, amount: Math.abs(a.balance || 0) })) };
   }
 
   async getProfitLoss() {
@@ -685,12 +661,20 @@ class MitraService {
       }
 
       const ctx = await this.gatherFinancialContext(userId, role);
-      const snapshot = this._formatFinancialContext(ctx);
+
+      const instruction = [
+        'You are Mitra, the AI financial assistant for ARTHA — an India-compliant accounting platform.',
+        'You have been given the user\'s real-time financial data from their ARTHA account.',
+        'Use ONLY the provided financial data to answer. Never say you don\'t have access to data.',
+        'If the data doesn\'t contain enough information to answer, say what specific data is missing.',
+        'Always quote actual numbers from the data. Format currency in Indian Rupees (₹).',
+        'Be concise and direct. Answer in the same language the user writes in.',
+      ].join(' ');
 
       let enrichedMessage;
       if (capabilityResult && capabilityResult.success) {
         enrichedMessage = [
-          `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]`,
+          instruction,
           '',
           `[CAPABILITY RESULT - ${intent.description}]`,
           JSON.stringify(capabilityResult.data, null, 2),
@@ -699,15 +683,30 @@ class MitraService {
         ].join('\n');
       } else if (capabilityResult && !capabilityResult.success) {
         enrichedMessage = [
-          `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]`,
+          instruction,
           '',
           `[CAPABILITY ERROR] ${capabilityResult.error}`,
           '',
           `[USER QUESTION] ${message}`,
         ].join('\n');
       } else {
-        enrichedMessage = `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]\n\nUser Question: ${message}`;
+        enrichedMessage = [instruction, '', `[USER QUESTION] ${message}`].join('\n');
       }
+
+      const financialContext = {
+        current_date: ctx.current_date,
+        financial_year: ctx.financial_year,
+        summary: ctx.summary,
+        recent_journal_entries: ctx.recent_journal_entries.slice(0, 10),
+        recent_invoices: ctx.recent_invoices.slice(0, 10),
+        recent_expenses: ctx.recent_expenses.slice(0, 10),
+        account_balances: ctx.account_balances.slice(0, 20),
+        income_by_account: ctx.income_by_account,
+        expenses_by_account: ctx.expenses_by_account,
+        gst_summary: ctx.gst_summary,
+        tds_entries: ctx.tds_entries.slice(0, 10),
+        statements: ctx.statements,
+      };
 
       const payload = this._buildPayload(enrichedMessage, userId, {
         user_name: userName,
@@ -715,6 +714,7 @@ class MitraService {
         trace_id: traceId,
         intent: intent?.handler || 'general',
         capability_used: intent?.capability || null,
+        _financial_context: financialContext,
       });
 
       const response = await this._getClient().post('/api/assistant', payload);
@@ -759,12 +759,18 @@ class MitraService {
       }
 
       const ctx = await this.gatherFinancialContext(userId, role);
-      const snapshot = this._formatFinancialContext(ctx);
+
+      const instruction = [
+        'You are Mitra, the AI financial assistant for ARTHA — an India-compliant accounting platform.',
+        'You have been given the user\'s real-time financial data from their ARTHA account.',
+        'Provide a detailed financial analysis using ONLY the provided data. Never fabricate numbers.',
+        'Format currency in Indian Rupees (₹). Use tables where helpful.',
+      ].join(' ');
 
       let enrichedMessage;
       if (capabilityResult && capabilityResult.success) {
         enrichedMessage = [
-          `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]`,
+          instruction,
           '',
           `[CAPABILITY RESULT - ${intent.description}]`,
           JSON.stringify(capabilityResult.data, null, 2),
@@ -772,14 +778,30 @@ class MitraService {
           `[ANALYSIS REQUEST] ${query}`,
         ].join('\n');
       } else {
-        enrichedMessage = `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]\n\n[ANALYSIS REQUEST] ${query}`;
+        enrichedMessage = [instruction, '', `[ANALYSIS REQUEST] ${query}`].join('\n');
       }
+
+      const financialContext = {
+        current_date: ctx.current_date,
+        financial_year: ctx.financial_year,
+        summary: ctx.summary,
+        recent_journal_entries: ctx.recent_journal_entries.slice(0, 10),
+        recent_invoices: ctx.recent_invoices.slice(0, 10),
+        recent_expenses: ctx.recent_expenses.slice(0, 10),
+        account_balances: ctx.account_balances.slice(0, 20),
+        income_by_account: ctx.income_by_account,
+        expenses_by_account: ctx.expenses_by_account,
+        gst_summary: ctx.gst_summary,
+        tds_entries: ctx.tds_entries.slice(0, 10),
+        statements: ctx.statements,
+      };
 
       const payload = this._buildPayload(enrichedMessage, userId, {
         analysis_mode: true,
         user_role: role,
         trace_id: traceId,
         capability_used: intent?.capability || null,
+        _financial_context: financialContext,
       });
 
       const response = await this._getClient().post('/api/assistant', payload);
@@ -811,13 +833,35 @@ class MitraService {
     try {
       const role = userRole || 'viewer';
       const ctx = await this.gatherFinancialContext(userId, role);
-      const snapshot = this._formatFinancialContext(ctx);
-      const enrichedMessage = `[ARATHA FINANCIAL DATA]\n${snapshot}\n[/ARATHA FINANCIAL DATA]\n\n[INSIGHTS REQUEST] Provide a brief financial health summary based on the above data.`;
+
+      const instruction = [
+        'You are Mitra, the AI financial assistant for ARTHA — an India-compliant accounting platform.',
+        'Provide a concise financial health summary using ONLY the provided data.',
+        'Highlight key metrics, trends, and any areas of concern.',
+      ].join(' ');
+
+      const financialContext = {
+        current_date: ctx.current_date,
+        financial_year: ctx.financial_year,
+        summary: ctx.summary,
+        recent_journal_entries: ctx.recent_journal_entries.slice(0, 10),
+        recent_invoices: ctx.recent_invoices.slice(0, 10),
+        recent_expenses: ctx.recent_expenses.slice(0, 10),
+        account_balances: ctx.account_balances.slice(0, 20),
+        income_by_account: ctx.income_by_account,
+        expenses_by_account: ctx.expenses_by_account,
+        gst_summary: ctx.gst_summary,
+        tds_entries: ctx.tds_entries.slice(0, 10),
+        statements: ctx.statements,
+      };
+
+      const enrichedMessage = [instruction, '', '[INSIGHTS REQUEST] Provide a brief financial health summary based on the above data.'].join('\n');
 
       const payload = this._buildPayload(enrichedMessage, userId, {
         insights_mode: true,
         user_role: role,
         trace_id: traceId,
+        _financial_context: financialContext,
       });
 
       const response = await this._getClient().post('/api/assistant', payload);
@@ -864,29 +908,46 @@ class MitraService {
       }
 
       const ctx = await this.gatherFinancialContext(userId, role);
-      const snapshot = this._formatFinancialContext(ctx);
 
-      const statementContext = statement
-        ? [
-            `\n\nBank Statement: ${statement.filename}`,
-            `Uploaded: ${statement.uploadedAt}`,
-            `Status: ${statement.status}`,
-            `Transactions: ${statement.transactionCount || 0}`,
-            statement.transactions ? `\nTransactions:\n${statement.transactions.slice(0, 20).map(t => `  - ${t.date} | ${t.description} | ₹${t.amount} | ${t.type}`).join('\n')}` : '',
-          ].join('\n')
-        : '';
+      const instruction = [
+        'You are Mitra, the AI financial assistant for ARTHA — an India-compliant accounting platform.',
+        'You have been given the user\'s financial data and a bank statement to analyze.',
+        'Provide insights on the statement in context of their overall finances.',
+      ].join(' ');
 
-      const enrichedMessage = [
-        `[ARATHA FINANCIAL DATA]\n${snapshot}${statementContext}\n[/ARATHA FINANCIAL DATA]`,
-        '',
-        `[BANK STATEMENT ANALYSIS] ${message}`,
-      ].join('\n');
+      const statementData = statement
+        ? {
+            filename: statement.filename,
+            uploaded: statement.uploadedAt,
+            status: statement.status,
+            transactions: statement.transactions ? statement.transactions.slice(0, 20) : [],
+          }
+        : null;
+
+      const financialContext = {
+        current_date: ctx.current_date,
+        financial_year: ctx.financial_year,
+        summary: ctx.summary,
+        recent_journal_entries: ctx.recent_journal_entries.slice(0, 5),
+        recent_invoices: ctx.recent_invoices.slice(0, 5),
+        recent_expenses: ctx.recent_expenses.slice(0, 5),
+        account_balances: ctx.account_balances.slice(0, 10),
+        income_by_account: ctx.income_by_account,
+        expenses_by_account: ctx.expenses_by_account,
+        gst_summary: ctx.gst_summary,
+        tds_entries: ctx.tds_entries.slice(0, 5),
+        statements: ctx.statements,
+        bank_statement: statementData,
+      };
+
+      const enrichedMessage = [instruction, '', `[BANK STATEMENT ANALYSIS] ${message}`].join('\n');
 
       const payload = this._buildPayload(enrichedMessage, userId, {
         statement_analysis: true,
         statement_id: statementId,
         user_role: role,
         trace_id: traceId,
+        _financial_context: financialContext,
       });
 
       const response = await this._getClient().post('/api/assistant', payload);

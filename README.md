@@ -73,6 +73,16 @@
 - **Monitoring**: Real-time system health dashboard
 - **Performance Optimization**: Database indexing and query optimization
 
+### ✅ Device Push Notifications
+- **Browser Push Notifications**: Device-level notifications (like WhatsApp pop-ups) via Web Push API + Service Worker
+- **VAPID Authentication**: Secure push delivery using VAPID keys (public/private key pair)
+- **Automatic Broadcast**: Every in-app notification (invoices, expenses, TDS, dealer sync, agent check-in/out) is also pushed to all subscribed devices
+- **Service Worker**: Background push handling with notification click → deep link navigation
+- **Permission Management**: Dismissible banner prompts users to enable notifications on login
+- **Push Subscription Lifecycle**: Subscribe on login, unsubscribe on demand, auto-deactivate expired subscriptions (HTTP 410)
+- **Diagnostic Endpoints**: `/api/v1/push/status` (pipeline health check) and `/api/v1/push/test` (send test notification)
+- **Priority Handling**: Urgent/high-priority notifications stay visible until dismissed
+
 ### ✅ BHIV Ecosystem Integration
 - **Capability Registry**: Canonical single source of truth for capability contracts (10 capability contracts)
 - **Policy Engine**: Runtime enforcement with deterministic ALLOW/DENY decisions
@@ -651,6 +661,26 @@ Body: { token, platform }
 DELETE /api/v1/notifications/device-token/:token
 ```
 
+### Push Notifications (Device-Level)
+```bash
+# Get VAPID public key (for service worker subscription)
+GET /api/v1/push/vapid-key
+
+# Register web push subscription (called by frontend service worker)
+POST /api/v1/push/subscribe
+Body: { subscription: { endpoint, keys: { p256dh, auth } }, userAgent: "..." }
+
+# Unregister web push subscription
+POST /api/v1/push/unsubscribe
+Body: { token: "..." }
+
+# Check push notification pipeline status (diagnostic)
+GET /api/v1/push/status
+
+# Send a test push notification to all subscribers
+POST /api/v1/push/test
+```
+
 ### BHIV Governance API (30+ Endpoints)
 ```bash
 # Capability Registry
@@ -765,6 +795,32 @@ ProvenanceBlock (governance chain)
   │  hash-linked, append-only governance decision record
 ```
 
+### Notification → Device Push Chain
+```
+Business Event (invoice sent, expense approved, etc.)
+  │  notificationEvent.invoiceSent(invoice)
+  ▼
+notificationEvent._create(data)
+  │  1. Notification.create({...})         ← in-app notification (MongoDB)
+  │  2. pushNotificationService
+  │     .pushToAllSubscribers(notification)
+  ▼
+pushNotificationService.pushToAllSubscribers()
+  │  DeviceToken.find({ isActive: true, platform: 'web' })
+  │  For each subscription:
+  │    → webPush.sendNotification(subscription, payload)
+  ▼
+Service Worker (sw.js)
+  │  push event listener
+  │  self.registration.showNotification(title, options)
+  ▼
+Device Notification Bar (OS-level pop-up)
+  │  User clicks notification
+  │  notificationclick event → navigate to notification.link
+  ▼
+Frontend deep link (e.g., /invoices/:id)
+```
+
 ## ✅ Integrity Verification
 
 Run the integrity verification script:
@@ -790,7 +846,8 @@ This verifies:
 - **Decimal.js** for precise financial calculations
 - **HMAC-SHA256** for ledger hash-chain
 - **JWT** for authentication
-- **51 Services** — Core accounting, compliance, BHIV governance, integration, runtime, infrastructure, Niyantran, Dealer CRM, Sales Agents
+- **web-push** for browser push notifications (VAPID-authenticated)
+- **51 Services** — Core accounting, compliance, BHIV governance, integration, runtime, infrastructure, Niyantran, Dealer CRM, Sales Agents, Push Notifications
 - **30 Controllers** — Request handlers for all API endpoints
 - **31 Route Files** — RESTful API routing
 - **11 Middleware** — Auth, authority enforcement, policy engine, security, monitoring, caching
@@ -801,6 +858,7 @@ This verifies:
 - **Tailwind CSS** for styling
 - **React Router** for navigation
 - **Axios** for API calls
+- **Service Worker** (`sw.js`) for background push notification handling
 
 ### Database Models (41)
 
@@ -930,7 +988,11 @@ This verifies:
 - Niyantran Service — GPS ping recording, haversine distance, dealer proximity, check-in/out
 - Dealer Service — Dealer CRUD, Tally sync, outstanding tracking, stats
 - Sales Agent Service — Agent CRUD, dashboard, performance history, dealer assignment
-- Push Notification Service — Web-push, device token management, alert dispatch
+- Push Notification Service — Web-push broadcast, VAPID auth, device token lifecycle, auto-deactivate expired (HTTP 410)
+
+**Push Notifications (2):**
+- Push Notification Service (`pushNotification.service.js`) — Broadcasts to all active web subscribers via web-push, manages DeviceToken registry, VAPID configuration with post-dotenv reconfigure
+- Notification Event Service (`notificationEvent.service.js`) — Fire-and-forget notification creator that auto-triggers device push after every in-app notification (invoices, expenses, TDS, dealer sync, agent events)
 
 ## 📊 Sample Data
 
@@ -980,7 +1042,7 @@ For issues and support:
 
 ---
 
-**Last Updated**: September 5, 2026  
+**Last Updated**: September 21, 2026  
 **Version**: 0.1  
 **Status**: BHIV Ecosystem Production Participant ✓  
 **Integrity**: Verified ✓  
@@ -988,7 +1050,8 @@ For issues and support:
 **BHIV Integration**: Complete ✓  
 **SETU Pipeline**: Operational ✓  
 **TANTRA Chain**: Operational ✓  
+**Push Notifications**: Operational ✓  
 **Models**: 41 ✓  
-**Services**: 51 ✓  
+**Services**: 53 ✓  
 **Routes**: 31 ✓  
 **Governance Endpoints**: 30+ ✓

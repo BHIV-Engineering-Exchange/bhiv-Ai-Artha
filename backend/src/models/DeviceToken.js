@@ -4,12 +4,12 @@ const deviceTokenSchema = new mongoose.Schema({
   agentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SalesAgent',
-    required: true,
+    default: null,
     index: true,
   },
   agentName: {
     type: String,
-    required: true,
+    default: 'web-user',
   },
   token: {
     type: String,

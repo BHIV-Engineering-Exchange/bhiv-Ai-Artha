@@ -198,6 +198,15 @@ npm run proof:all                     # all proof scripts
 | GET | `/ready` | Public | ✅ Working |
 | GET | `/live` | Public | ✅ Working |
 
+### Push Notifications (Device-Level)
+| Method | Endpoint | Access | Status |
+|--------|----------|--------|--------|
+| GET | `/api/v1/push/vapid-key` | Public | ✅ Working |
+| POST | `/api/v1/push/subscribe` | Public | ✅ Working |
+| POST | `/api/v1/push/unsubscribe` | Public | ✅ Working |
+| GET | `/api/v1/push/status` | Public | ✅ Working |
+| POST | `/api/v1/push/test` | Public | ✅ Working |
+
 ---
 
 ## 6. Integration Status Matrix
@@ -431,7 +440,7 @@ AI-Artha-main/
 │   │   ├── middleware/        (12 middleware: auth, authority, policy, security, monitoring, etc.)
 │   │   ├── models/           (39 Mongoose models)
 │   │   ├── routes/           (29 route files)
-│   │   ├── services/         (60 service files)
+│   │   ├── services/         (62 service files including push notifications)
 │   │   ├── runtime/          (runtime configuration)
 │   │   ├── utils/            (auth tokens, helpers)
 │   │   └── server.js         (Express app entry point)
@@ -452,7 +461,7 @@ AI-Artha-main/
 │   │   ├── pages/            (12 page directories)
 │   │   ├── services/         (api.js, service wrappers)
 │   │   ├── store/            (authStore.js — Zustand)
-│   │   ├── hooks/            (9 custom hooks)
+│   │   ├── hooks/            (10 custom hooks including usePushNotifications)
 │   │   ├── utils/            (formatters, theme utils)
 │   │   ├── design-system/    (design tokens)
 │   │   ├── App.jsx           (route definitions)
@@ -474,7 +483,7 @@ AI-Artha-main/
 
 ---
 
-**Last Updated**: August 11, 2026
+**Last Updated**: September 21, 2026
 **Version**: 0.1
 **Status**: BHIV Ecosystem Production Participant
 **Integrity**: Verified
@@ -482,7 +491,8 @@ AI-Artha-main/
 **BHIV Integration**: Complete
 **SETU Pipeline**: Operational (local)
 **TANTRA Chain**: Operational (local)
-**Models**: 39
-**Services**: 60
-**Routes**: 29
+**Push Notifications**: Operational (web-push + VAPID + Service Worker)
+**Models**: 41
+**Services**: 53
+**Routes**: 31
 **Governance Endpoints**: 30+

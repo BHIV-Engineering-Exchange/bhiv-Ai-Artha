@@ -1,13 +1,16 @@
 import Notification from '../models/Notification.js';
 import logger from '../config/logger.js';
+import pushNotificationService from './pushNotification.service.js';
 
 class NotificationEventService {
   /**
    * Fire-and-forget notification creator. Never throws — failures are logged only.
+   * Also pushes to all active web subscribers for device-level notifications.
    */
   async _create(data) {
+    let notification;
     try {
-      await Notification.create({
+      notification = await Notification.create({
         title: data.title,
         body: data.body,
         type: data.type || 'info',
@@ -20,6 +23,17 @@ class NotificationEventService {
       });
     } catch (err) {
       logger.warn(`NotificationEvent create failed: ${err.message}`);
+      return;
+    }
+
+    // Push to all active web subscribers (device notification outside the website)
+    logger.info(`NotificationEvent "${data.title}" created (id=${notification._id}), webPushAvailable=${pushNotificationService.webPushAvailable}`);
+    if (notification && pushNotificationService.webPushAvailable) {
+      try {
+        await pushNotificationService.pushToAllSubscribers(notification);
+      } catch (err) {
+        logger.warn(`NotificationEvent push failed: ${err.message}`);
+      }
     }
   }
 

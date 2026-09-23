@@ -3,12 +3,17 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { useTheme } from '../../hooks/useTheme.jsx';
+import { useAuthStore } from '../../store/authStore';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 import MitraChatWidget from '../mitra/MitraChatWidget';
+import PushPermissionBanner from '../notifications/PushPermissionBanner';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { isUniverseMode, isDarkMode } = useTheme();
+  const { user } = useAuthStore();
+  const pushNotifications = usePushNotifications(user);
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -41,6 +46,8 @@ const Layout = () => {
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           onMobileMenuClick={() => setMobileSidebarOpen(true)}
         />
+
+        <PushPermissionBanner pushNotifications={pushNotifications} />
 
         <main className="p-4 lg:p-6">
           <div className="max-w-7xl mx-auto">

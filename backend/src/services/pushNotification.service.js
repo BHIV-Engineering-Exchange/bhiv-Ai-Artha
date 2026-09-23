@@ -1,32 +1,43 @@
 import Notification from '../models/Notification.js';
 import DeviceToken from '../models/DeviceToken.js';
-import SalesAgent from '../models/SalesAgent.js';
 import logger from '../config/logger.js';
 
 class PushNotificationService {
   constructor() {
     this.webPushAvailable = false;
-    this.init();
+    this.webPush = null;
+    this._initPromise = this.init();
   }
 
   async init() {
     try {
       const webPush = await import('web-push');
       this.webPush = webPush.default;
-      if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-        this.webPush.setVapidDetails(
-          'mailto:admin@artha.blackholeinfiverse.com',
-          process.env.VAPID_PUBLIC_KEY,
-          process.env.VAPID_PRIVATE_KEY
-        );
-        this.webPushAvailable = true;
-        logger.info('Push notifications: VAPID keys configured');
-      } else {
-        logger.info('Push notifications: VAPID keys not set, push disabled (notifications still stored)');
-      }
+      this._configureVapid();
     } catch {
       logger.info('Push notifications: web-push not installed, notifications stored but not pushed');
     }
+  }
+
+  _configureVapid() {
+    if (!this.webPush) return;
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      this.webPush.setVapidDetails(
+        'mailto:admin@artha.blackholeinfiverse.com',
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+      );
+      this.webPushAvailable = true;
+      logger.info('Push notifications: VAPID keys configured');
+    } else {
+      logger.info('Push notifications: VAPID keys not set, push disabled (notifications still stored)');
+    }
+  }
+
+  /** Call after dotenv.config() to re-check VAPID keys. Waits for web-push to load if needed. */
+  async reconfigure() {
+    await this._initPromise;
+    this._configureVapid();
   }
 
   async sendNotification(data) {
@@ -39,23 +50,75 @@ class PushNotificationService {
       recipientRole: data.recipientRole || 'all',
       data: data.data || {},
       priority: data.priority || 'normal',
+      link: data.link || null,
       expiresAt: data.expiresAt || null,
     });
 
-    if (data.recipientId && this.webPushAvailable) {
+    if (this.webPushAvailable) {
       try {
-        await this.pushToDevice(data.recipientId, notification);
+        await this.pushToAllSubscribers(notification);
         notification.isPushed = true;
         notification.pushedAt = new Date();
         await notification.save();
       } catch (err) {
         notification.pushError = err.message;
         await notification.save();
-        logger.warn(`Push failed for agent ${data.recipientId}: ${err.message}`);
+        logger.warn(`Push broadcast failed: ${err.message}`);
       }
     }
 
     return notification;
+  }
+
+  async pushToAllSubscribers(notification) {
+    if (!this.webPushAvailable) {
+      logger.warn('pushToAllSubscribers: webPush not available, skipping');
+      return { sent: 0, failed: 0, deactivated: 0 };
+    }
+
+    const devices = await DeviceToken.find({ isActive: true, platform: 'web' });
+    logger.info(`pushToAllSubscribers: found ${devices.length} active web subscriptions for "${notification.title}"`);
+    if (devices.length === 0) return { sent: 0, failed: 0, deactivated: 0 };
+
+    const payload = JSON.stringify({
+      title: notification.title,
+      body: notification.body,
+      type: notification.type,
+      category: notification.category,
+      priority: notification.priority,
+      link: notification.link,
+      data: notification.data,
+      tag: `${notification.type}-${Date.now()}`,
+      notificationId: notification._id,
+    });
+
+    let sent = 0;
+    let failed = 0;
+    let deactivated = 0;
+
+    await Promise.allSettled(
+      devices.map(async (device) => {
+        try {
+          const subscription = JSON.parse(device.token);
+          await this.webPush.sendNotification(subscription, payload);
+          device.lastUsedAt = new Date();
+          await device.save();
+          sent++;
+        } catch (err) {
+          if (err.statusCode === 410) {
+            device.isActive = false;
+            await device.save();
+            deactivated++;
+          } else {
+            failed++;
+            logger.warn(`Push to device failed: ${err.message}`);
+          }
+        }
+      })
+    );
+
+    logger.info(`Push broadcast: ${sent} sent, ${failed} failed, ${deactivated} deactivated`);
+    return { sent, failed, deactivated };
   }
 
   async pushToDevice(agentId, notification) {
@@ -74,7 +137,7 @@ class PushNotificationService {
     const results = [];
     for (const device of tokens) {
       try {
-        if (device.platform === 'web' && device.token.startsWith('http')) {
+        if (device.platform === 'web') {
           await this.webPush.sendNotification(
             JSON.parse(device.token),
             payload
@@ -200,6 +263,22 @@ class PushNotificationService {
 
   async removeDeviceToken(token) {
     return DeviceToken.findOneAndUpdate({ token }, { isActive: false });
+  }
+
+  async registerWebPushSubscription(subscription, userAgent) {
+    const token = JSON.stringify(subscription);
+    return DeviceToken.findOneAndUpdate(
+      { token },
+      {
+        agentId: null,
+        agentName: 'web-user',
+        platform: 'web',
+        deviceId: userAgent || 'unknown',
+        isActive: true,
+        lastUsedAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
   }
 }
 
