@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_ORIGIN || '';
+import { API_BASE_URL } from '../services/api';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -39,7 +38,7 @@ export function usePushNotifications(user) {
 
   const fetchVapidKey = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/v1/push/vapid-key`);
+      const res = await axios.get(`${API_BASE_URL}/push/vapid-key`);
       return res.data?.data?.publicKey || '';
     } catch (err) {
       console.error('[Push] Failed to fetch VAPID key:', err.message);
@@ -68,23 +67,26 @@ export function usePushNotifications(user) {
     }
   }, []);
 
-  const sendSubscriptionToBackend = async (subscription) => {
+  const sendSubscriptionToBackend = useCallback(async (subscription) => {
     try {
       setStatus('Sending subscription to server...');
       const subJson = subscription.toJSON();
       console.log('[Push] Sending subscription to backend:', subJson.endpoint?.substring(0, 50) + '...');
-      await axios.post(`${API_BASE}/api/v1/push/subscribe`, {
+      await axios.post(`${API_BASE_URL}/push/subscribe`, {
         subscription: subJson,
         userAgent: navigator.userAgent,
       });
       setStatus('Subscription registered on server');
       console.log('[Push] Subscription registered successfully');
+      return true;
     } catch (err) {
       console.error('[Push] Failed to register subscription:', err);
       setError('Backend registration failed: ' + err.message);
       setStatus('Backend registration failed');
+      initRunRef.current = false;
+      return false;
     }
-  };
+  }, []);
 
   const subscribeToPush = useCallback(async () => {
     setStatus('Fetching VAPID key...');
@@ -93,6 +95,7 @@ export function usePushNotifications(user) {
       console.warn('[Push] VAPID public key not available');
       setError('VAPID key not available from server');
       setStatus('No VAPID key');
+      initRunRef.current = false;
       return;
     }
     console.log('[Push] VAPID key received');
@@ -102,6 +105,7 @@ export function usePushNotifications(user) {
       if (!reg) {
         setError('No service worker registration');
         setStatus('No SW registration');
+        initRunRef.current = false;
         return;
       }
 
@@ -128,8 +132,9 @@ export function usePushNotifications(user) {
       console.error('[Push] Push subscription failed:', err);
       setError('Push subscription failed: ' + err.message);
       setStatus('Push subscription failed');
+      initRunRef.current = false;
     }
-  }, [fetchVapidKey]);
+  }, [fetchVapidKey, sendSubscriptionToBackend]);
 
   const requestPermission = useCallback(async () => {
     if (!isSupported) {
@@ -172,7 +177,7 @@ export function usePushNotifications(user) {
         await sub.unsubscribe();
         setIsSubscribed(false);
         try {
-          await axios.post(`${API_BASE}/api/v1/push/unsubscribe`, {
+          await axios.post(`${API_BASE_URL}/push/unsubscribe`, {
             token: JSON.stringify(subJson),
           });
         } catch {
@@ -184,14 +189,18 @@ export function usePushNotifications(user) {
     }
   }, []);
 
-  // Auto-subscribe on mount if user is logged in and permission is already granted
+  // Auto-subscribe on mount if user is logged in and permission is already granted.
+  // Always re-POST an existing subscription so a failed first attempt recovers.
   useEffect(() => {
     if (!user || !isSupported || initRunRef.current) return;
     initRunRef.current = true;
 
     const init = async () => {
       const reg = await registerServiceWorker();
-      if (!reg) return;
+      if (!reg) {
+        initRunRef.current = false;
+        return;
+      }
 
       if (Notification.permission === 'granted') {
         await subscribeToPush();

@@ -11,5 +11,9 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: VAPID_PUBLIC_KEY
+        value: BHLns5FxZsbo4a9auuhrb59Gc5y7YzPL9Hod8Lv83A838o3LQ5zoIgx00HODEGSfvnnbK6VRzlblan1gYQyvO-o
+      - key: VAPID_PRIVATE_KEY
+        value: Jjm25v9BATQ2A1vHU3IXqiK7ArmRn4M7VErkcAZ6Wio
     healthCheckPath: /api/health
     autoDeploy: true
