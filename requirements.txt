@@ -1,0 +1,9 @@
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+pydantic==2.13.3
+pydantic-core==2.46.3
+requests==2.34.2
+python-dotenv==1.2.2
+cryptography==49.0.0
+pytest==9.0.3
+pytest-asyncio==0.24.0
